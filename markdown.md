@@ -44,9 +44,9 @@ this is a block string.
 <li>Parish</li>
 </ol>
 
-1.aaaa
-1.bbbb
-2.cccc
+1. aaaa
+1. bbbb
+2. cccc
 
 
 
