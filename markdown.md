@@ -38,4 +38,10 @@ this is a block string.
 2. this is another other list item.
 3. the last.
 
+<ol>
+<li>Bird</li>
+<li>McHale</li>
+<li>Parish</li>
+</ol>
+
 
