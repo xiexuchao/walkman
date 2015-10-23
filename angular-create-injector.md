@@ -34,6 +34,7 @@
 
 ### createInjector(modules)分析
 > 兜了一大圈， 终于切入主题了。 下面我们详细分析下createInjector()吧。
+
 ```
 function createInjector(modulesToLoad) {
   var INSTANTIATING = {},
@@ -65,6 +66,6 @@ function createInjector(modulesToLoad) {
 
   return instanceInjector;
   
-  ...
+  //...
 }
 ```
