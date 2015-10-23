@@ -88,6 +88,7 @@ function publishExternalAPI(angular){
 (function() { return return function module(name, requires, configFn) { // 第二层closure ... } })()
 
 > angularModule(name[, requires][, configFn])是原型方法
+
 1. name: 模块名称
 2. requires: 模块的依赖关系
 3. configFn: 模块的配置函数
