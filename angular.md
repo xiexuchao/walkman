@@ -68,6 +68,7 @@ function publishExternalAPI(angular){
         ...
     });
     angularModule = setupModuleLoader(window);
+    // 尝试获取ngLocale模块， 如果不存在则设置它
     try {
         angularModule('ngLocale');
     } catch (e) {
