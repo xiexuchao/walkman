@@ -8,12 +8,12 @@ AngularJS源码分析
 
 ```
 function setupModuleLoader(window) {
-    return ensure(ensure(window, 'angular', Object), 'module', function() {
+    return ensure(ensure(window, 'angular', Object), 'module', function() { // 第一层closure
         var modules = {};
         ...
-        return function module(name, requires, configFn) {
+        return function module(name, requires, configFn) { // 第二层closure
             ...
-            return ensure(modules, name, function() {
+            return ensure(modules, name, function() { // 第三层closure
                 var invokeQueue = [];
                 ...
                 var config = invokeLater('$injector', 'invoke');
@@ -21,7 +21,7 @@ function setupModuleLoader(window) {
                 if (configFn) {
                     config(configFn);
                 }
-                return moduleInstance;
+                return moduleInstance;   // 第四层实例返回
             }
         }
     });
@@ -80,3 +80,6 @@ function publishExternalAPI(angular){
     ...
 }
 ```
+
+### angularModule分析
+> 从上面的代码可知angularModule = setupModuleLoader(window); 返回的是第一层closure, 实际上返回的就是window.angular.module, 这个是一个对象(function() { return return function module(name, requires, configFn) { // 第二层closure ... } })()
