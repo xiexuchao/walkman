@@ -31,3 +31,40 @@
     return injector;
   };
 ```
+
+### createInjector(modules)分析
+> 兜了一大圈， 终于切入主题了。 下面我们详细分析下createInjector()吧。
+```
+function createInjector(modulesToLoad) {
+  var INSTANTIATING = {},
+      providerSuffix = 'Provider',
+      path = [],
+      loadedModules = new HashMap(),
+      providerCache = {
+        $provide: {
+            provider: supportObject(provider),
+            factory: supportObject(factory),
+            service: supportObject(service),
+            value: supportObject(value),
+            constant: supportObject(constant),
+            decorator: decorator
+          }
+      },
+      providerInjector = createInternalInjector(providerCache, function() {
+        throw Error("Unknown provider: " + path.join(' <- '));
+      }),
+      instanceCache = {},
+      instanceInjector = (instanceCache.$injector =
+          createInternalInjector(instanceCache, function(servicename) {
+            var provider = providerInjector.get(servicename + providerSuffix);
+            return instanceInjector.invoke(provider.$get, provider);
+          }));
+
+
+  forEach(loadModules(modulesToLoad), function(fn) { instanceInjector.invoke(fn || noop); });
+
+  return instanceInjector;
+  
+  ...
+}
+```
