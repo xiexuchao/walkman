@@ -26,6 +26,7 @@ function setupModuleLoader(window) {
     });
 }
 ```
+
 1. 最外层直接返回ensure(ensure(window, 'angular', Object), 'module', function(){}), 那么我们首先应该搞懂ensure是干什么的。
 2. ensure()函数分析
 
