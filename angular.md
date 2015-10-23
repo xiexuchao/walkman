@@ -42,4 +42,8 @@ function ensure(obj, name, factory) {
 
 > 结果返回obj上面的一个name属性相对应的对象， factory一般为function， 即obj[name]的构造函数。
 
-> 结合上面的ensure(ensure(window, 'angular', Object), 'module', function(){}), 实际上返回的是window.angular.module, 而，window.angular是一个普通的javascript Object, window.angular.module则是(function(){}); 这种实现也是angular为了不污染全局空间， 所有的对象都在angular命名空间。
+> 结合上面的ensure(ensure(window, 'angular', Object), 'module', function(){}), 实际上返回的是window.angular.module。
+
+> window.angular是一个普通的javascript Object, window.angular.module则是(function(){}); 
+
+> 这种实现也是angular为了不污染全局空间， 所有的对象都在angular命名空间。
