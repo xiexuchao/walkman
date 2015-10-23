@@ -99,4 +99,6 @@ function publishExternalAPI(angular){
 
 > 后者实际上是setter, 需要除了name参数之外， 还需要requires, 而configFn可选。
 
-> 综上所述， angularModule实际上就是模块的getter, setter器。
+> 综上所述， angularModule实际上就是模块的getter, setter器。 
+
+> setupModuleLoader()函数就实至名归了， 就是设置模块的加载器， 用于获取或者设置angular.module.{mod_name}的。
