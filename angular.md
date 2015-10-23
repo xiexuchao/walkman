@@ -64,3 +64,19 @@ function ensure(obj, name, factory) {
 
 })(window, document);
 ```
+> 这里我们不纠结每个核心函数的功能， 仅仅围绕本文重心来看， 调用setupModuleLoader的是第二个环节，即publishExternalAPI(angular).
+
+```
+function publishExternalAPI(angular){
+    extend(angular, {
+        ...
+    });
+    angularModule = setupModuleLoader(window);
+    try {
+        angularModule('ngLocale');
+    } catch (e) {
+        angularModule('ngLocale', []).provider('$locale', $LocaleProvider);
+    }
+    ...
+}
+```
