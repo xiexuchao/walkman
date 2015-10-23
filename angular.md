@@ -27,7 +27,7 @@ function setupModuleLoader(window) {
     });
 }
 ```
-
+### ensure()函数
 > 最外层直接返回ensure(ensure(window, 'angular', Object), 'module', function(){}), 那么我们首先应该搞懂ensure是干什么的, 下面是ensure()函数:
 
 ```
@@ -48,7 +48,8 @@ function ensure(obj, name, factory) {
 
 > 这种实现也是angular为了不污染全局空间， 所有的对象都在angular命名空间。
 
-> 下面再回过头从angular的核心代码块看起
+
+### 下面再回过头从angular的核心代码块看起
 
 ```
 (function(window, document, undefined) {
