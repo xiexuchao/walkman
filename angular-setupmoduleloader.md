@@ -171,19 +171,21 @@ function invokeLater(provider, method, insertMethod) {
 2. method: 方法
 3. insertMethod: 插入方法， 默认push, 猜测可能有unshift, 就是javascript向数组插入新元素的顺序，push向后面附加新元素。
 
-> 该函数返回一个函数。
+> 该函数返回一个闭包函数，该闭包函数，最终将(provider, method, [arguments]) push|unshift到invokeQueue数组中。这里并不马上执行。
+
+> invokeQueue大概类似[[provider, method, [params]], [...], [...]], 后续调用方法大概类似invokeItem[0]invokeItem[1](invokeItem[2]).
 
 ### setupModuleLoader第三层clousure分析
-> 该层clousure也是使用了局部变量invokeQueue作为调用队列， 统一管理调用队列， 这个队列保存了调用对象标识符， 方法名，以及调用参数的详细信息， 通过invokeLater提前注册， 需要时先搜索再调用的原则。
+> 该层clousure也是使用了局部变量invokeQueue作为调用队列， 统一管理调用队列， 这个队列保存了调用对象标识符， 方法名，以及调用参数的详细信息， 通过invokeLater返回闭包函数， 便于invoke队列的注册，其中参数由具体属性返回的闭包传入。
 
-1. config: $injector -> invoke ()
-2. provider: $provider -> provider ()
-3. factory: $provider -> factory ()
-4. service: $provider -> service ()
-5. value: $provider -> value ()
-6. constant: $provider -> constant () | unshift插入模式
-7. filter: $filterProvider -> register ()
-8. controller: $controllerProvider -> register ()
-9. directive: $compileProvider -> register ()
+1. config: $injector , invoke
+2. provider: $provider , provider
+3. factory: $provider , factory
+4. service: $provider , service
+5. value: $provider , value
+6. constant: $provider , constant | unshift插入模式
+7. filter: $filterProvider , register
+8. controller: $controllerProvider , register
+9. directive: $compileProvider , register
 
-> 在invokeQueue中注册了$injector, $provider, $filterProvider, $controllerProvider, $compileProvider相应的几个方法。
+> 以上均为moduleInstance的属性， 都是闭包函数。 后续可以调用moduleInstance.config(params), 实际完成在invokeQueue中的注册。
