@@ -64,5 +64,18 @@ function createInjector(modulesToLoad) {
     forEach(loadModules(modulesToLoad), function(fn) { instanceInjector.invoke(fn || noop); });
 
     return instanceInjector;
+    // 此处略去千万行
 }
 ```
+
+#### 重要变量
+1. providerCache
+2. providerInjector
+3. instanceCache
+4. instanceInjector
+
+#### 重要方法
+1. createInternalInjector
+2. loadModules
+
+
