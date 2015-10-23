@@ -82,4 +82,12 @@ function publishExternalAPI(angular){
 ```
 
 ### angularModule分析
-> 从上面的代码可知angularModule = setupModuleLoader(window); 返回的是第一层closure, 实际上返回的就是window.angular.module, 这个是一个对象(function() { return return function module(name, requires, configFn) { // 第二层closure ... } })()
+> 从上面的代码可知angularModule = setupModuleLoader(window); 返回的是第一层closure, 
+
+> 就是window.angular.module, 这个是一个函数对象
+(function() { return return function module(name, requires, configFn) { // 第二层closure ... } })()
+
+> angularModule(name[, requires][, configFn])是原型方法
+1. name: 模块名称
+2. requires: 模块的依赖关系
+3. configFn: 模块的配置函数
