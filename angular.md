@@ -4,6 +4,7 @@ AngularJS源码分析
 
 彻底搞懂setupModuleLoader(window)函数
 ----------------------------------------
+{
 function setupModuleLoader(window) {
     return ensure(ensure(window, 'angular', Object), 'module', function() {
         var modules = {};
@@ -23,5 +24,5 @@ function setupModuleLoader(window) {
         }
     });
 }
-
+}
 
