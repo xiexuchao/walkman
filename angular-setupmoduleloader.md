@@ -99,3 +99,10 @@ function publishExternalAPI(angular){
 > 综上所述， angularModule实际上就是模块的getter, setter器。 
 
 > setupModuleLoader()函数就实至名归了， 就是设置模块的加载器， 用于获取或者设置angular.module.{mod_name}的。
+
+### angular的模块加载器实现原理
+> 闭包，还是闭包，从setupModuleLoader的函数精简代码，我们可以看到， 最外层闭包里边定义了一个变量modules, 这个就是angular模块管理的"全局缓存"集中管理器， 不管后续的查找getter模块还是setter模块，都是通过这个modules来实现的。
+
+> 利用的是闭包， 内部函数返回后， 这个内部函数依然对其定义的局部空间的变量具有访问权限。 实现了缓存的目的。
+
+
