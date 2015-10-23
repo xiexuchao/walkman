@@ -92,3 +92,11 @@ function publishExternalAPI(angular){
 1. name: 模块名称
 2. requires: 模块的依赖关系
 3. configFn: 模块的配置函数
+
+> 继续分析setupModuleLoader， 可以发现， angularModule可以接收一个参数name, 也可以接收两个或三个参数。
+
+> 如果仅仅提供一个参数name, 则相当于getter, 获取给定名称的模块实例。 这个功能实现还是要靠前面简单而复杂的ensure函数做到的。 如果modules[name]存在， 直接返回， 否则执行必要检查， 最终返回moduleInstance. 
+
+> 后者实际上是setter, 需要除了name参数之外， 还需要requires, 而configFn可选。
+
+> 综上所述， angularModule实际上就是模块的getter, setter器。
