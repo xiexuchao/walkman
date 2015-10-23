@@ -47,3 +47,19 @@ function ensure(obj, name, factory) {
 > window.angular是一个普通的javascript Object, window.angular.module则是(function(){}); 
 
 > 这种实现也是angular为了不污染全局空间， 所有的对象都在angular命名空间。
+
+> 下面再回过头从angular的核心代码块看起
+
+```
+(function(window, document, undefined) {
+  ...
+  bindJQuery(); // 如果使用jQuery, 则绑定jQuery, 否则使用内置的JQLite. 对于大多数angular应用来说，JQLite足够了。
+
+  publishExternalAPI(angular); // 发布外部可用的angular api
+
+  jqLite(document).ready(function() {
+    angularInit(document, bootstrap); // 初始化， 启动入口
+  });
+
+})(window, document);
+```
