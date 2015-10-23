@@ -49,7 +49,7 @@ function ensure(obj, name, factory) {
 > 这种实现也是angular为了不污染全局空间， 所有的对象都在angular命名空间。
 
 
-### 下面再回过头从angular的核心代码块看起
+### angular的核心代码块
 
 ```
 (function(window, document, undefined) {
