@@ -156,3 +156,19 @@ function setupModuleLoader(window) {
     });
 }
 ```
+
+### invokeLater()函数分析
+```
+function invokeLater(provider, method, insertMethod) {
+    return function() {
+        invokeQueue[insertMethod || 'push']([provider, method, arguments]);
+        return moduleInstance;
+    }
+}
+```
+> invokeLater函数见名知意， 就是先注册起来，后面调用。
+1. provider: 注册函数的名称标识
+2. method: 方法
+3. insertMethod: 插入方法， 默认push, 猜测可能有unshift, 就是javascript向数组插入新元素的顺序，push向后面附加新元素。
+
+> 该函数返回一个函数。
