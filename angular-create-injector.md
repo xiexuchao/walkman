@@ -189,7 +189,24 @@ function annotate(fn) {
 
 ---------------
 ###### annotate详解
+```
+function assertArg(arg, name, reason) {
+  if (!arg) {
+    throw new Error("Argument '" + (name || '?') + "' is " + (reason || "required"));
+  }
+  return arg;
+}
 
+function assertArgFn(arg, name, acceptArrayAnnotation) {
+  if (acceptArrayAnnotation && isArray(arg)) {
+      arg = arg[arg.length - 1];
+  }
+
+  assertArg(isFunction(arg), name, 'not a function, got ' +
+      (arg && typeof arg == 'object' ? arg.constructor.name || 'Object' : typeof arg));
+  return arg;
+}
+```
 
 ##### 3. invoke(): 
 ```
