@@ -105,4 +105,54 @@ function publishExternalAPI(angular){
 
 > 利用的是闭包， 内部函数返回后， 这个内部函数依然对其定义的局部空间的变量具有访问权限。 实现了缓存的目的。
 
+```
+function setupModuleLoader(window) {
+    return ensure(ensure(window, 'angular', Object), 'module', function() { // 第一层closure
+        var modules = {};
+        ...
+        return function module(name, requires, configFn) { // 第二层closure
+            if (requires && modules.hasOwnProperty(name)) { // 这里给定了requires, 是setter, 需要将原来的modules[name]重置，然后重新设置。
+                modules[name] = null;
+            }
+            /**
+             * modules[name]存在，直接返回 备注getter无需requires
+             * modules[name]不存在， setter, 继续下面的逻辑
+             */
+            return ensure(modules, name, function() { // 第三层closure            
+                if (!requires) { // setter必须提供requires, 可以直接是空数组[].
+                    throw Error('No module: ' + name);
+                }
+                var invokeQueue = [];
+                var runBlocks = []; 
 
+                var config = invokeLater('$injector', 'invoke');
+                
+                var moduleInstance = {
+                    _invokeQueue: invokeQueue,
+                    _runBlocks: runBlocks,
+                    requires: requires,
+                    name: name,
+                    provider: invokeLater('$provide', 'provider'),
+                    factory: invokeLater('$provide', 'factory'),
+                    service: invokeLater('$provide', 'service'),
+                    value: invokeLater('$provide', 'value'),
+                    constant: invokeLater('$provide', 'constant', 'unshift'),
+                    filter: invokeLater('$filterProvider', 'register'),
+                    controller: invokeLater('$controllerProvider', 'register'),
+                    directive: invokeLater('$compileProvider', 'directive'),
+                    config: config,
+                    run: function(block) {
+                        runBlocks.push(block);
+                        return this;
+                    }
+                }
+
+                if (configFn) {
+                    config(configFn);
+                }
+                return moduleInstance;   // 第四层实例返回
+            }
+        }
+    });
+}
+```
