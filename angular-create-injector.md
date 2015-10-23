@@ -120,10 +120,10 @@ function getService(serviceName) {
 
 ##### 2. annotate()
 ```
-var FN_ARGS = /^function\s*[^\(]*\(\s*([^\)]*)\)/m;
+var FN_ARGS = /^function\s*[^\(]*\(\s*([^\)]*)\)/m; // 函数定义头匹配
 var FN_ARG_SPLIT = /,/;
-var FN_ARG = /^\s*(_?)(\S+?)\1\s*$/;
-var STRIP_COMMENTS = /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/mg;
+var FN_ARG = /^\s*(_?)(\S+?)\1\s*$/; // 贪婪匹配任意个空格开头， 中间字符为_、非空字符的1个以上， 结尾任意个空格。就是变量名称匹配
+var STRIP_COMMENTS = /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/mg; // 注释匹配
 function annotate(fn) {
   var $inject,
       fnText,
@@ -131,7 +131,7 @@ function annotate(fn) {
       last; 
 
   if (typeof fn == 'function') {
-    if (!($inject = fn.$inject)) {
+    if (!($inject = fn.$inject)) {// fn没有$inject属性， 则根据函数定义文本设置它
       $inject = []; 
       fnText = fn.toString().replace(STRIP_COMMENTS, '');
       argDecl = fnText.match(FN_ARGS);
@@ -140,7 +140,7 @@ function annotate(fn) {
           $inject.push(name);
         });   
       });   
-      fn.$inject = $inject;
+      fn.$inject = $inject; // $inject就是参数列表数组
     }
   } else if (isArray(fn)) {
     last = fn.length - 1;
@@ -188,6 +188,8 @@ function annotate(fn) {
 4. 最后一个参数表示字符串本身。
 
 ---------------
+###### annotate详解
+
 
 ##### 3. invoke(): 
 ```
