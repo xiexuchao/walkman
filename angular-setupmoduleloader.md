@@ -189,3 +189,34 @@ function invokeLater(provider, method, insertMethod) {
 9. directive: $compileProvider , register
 
 > 以上均为moduleInstance的属性， 都是闭包函数。 后续可以调用moduleInstance.config(params), 实际完成在invokeQueue中的注册。
+
+### angularModule
+```
+var /** holds major version number for IE or NaN for real browsers */
+    msie              = int((/msie (\d+)/.exec(lowercase(navigator.userAgent)) || [])[1]),
+    jqLite,           // delay binding since jQuery could be loaded after us.
+    jQuery,           // delay binding
+    slice             = [].slice,
+    push              = [].push,
+    toString          = Object.prototype.toString,
+
+    /** @name angular */
+    angular           = window.angular || (window.angular = {}),
+    angularModule,
+    nodeName_,
+    uid               = ['0', '0', '0'];
+```
+
+> 我们注意到在angular.js最上面有这么些定义， 这些变量对于angular来说是全局变量(当然只是在闭包中定义的)。
+
+> publishExternalAPI其实仅仅是为angular注册了一些外部可用的API, 以及赋予了angularModule这个模块加载器。真正有意思的还在后面， angularInit()才是重点。
+
+### 总结下setupModule做了些什么
+1. 主要是返回一个模块管理器angularModule
+2. angularModule是一个闭包， 在这个闭包中定义了一个模块管理的变量modules, 可以通过angularModule进行getter, setter, 实际上就是对modules[mod_name] = moduleInstance;
+3. 而moduleInstance包含有很多属性，比如invokeQueue, runBlocks, name, 以及其他一些闭包属性: provider, factory, service等等。
+
+### publishExternalAPI实现如下功能
+1. 注册一些api到angular命名空间， 比如extend, copy, uppercase, lowercase等等一些API.
+2. 获取angularModule, 即angular.module
+3. 注册ngLocal, ng到模块管理器中
