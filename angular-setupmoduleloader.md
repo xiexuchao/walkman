@@ -4,12 +4,12 @@
 
 ```
 function setupModuleLoader(window) {
-    return ensure(ensure(window, 'angular', Object), 'module', function() { // 第一层closure
+    return ensure(ensure(window, 'angular', Object), 'module', function() { // 第一层clousure
         var modules = {};
         ...
-        return function module(name, requires, configFn) { // 第二层closure
+        return function module(name, requires, configFn) { // 第二层clousure
             ...
-            return ensure(modules, name, function() { // 第三层closure
+            return ensure(modules, name, function() { // 第三层clousure
                 var invokeQueue = [];
                 ...
                 var config = invokeLater('$injector', 'invoke');
@@ -172,3 +172,18 @@ function invokeLater(provider, method, insertMethod) {
 3. insertMethod: 插入方法， 默认push, 猜测可能有unshift, 就是javascript向数组插入新元素的顺序，push向后面附加新元素。
 
 > 该函数返回一个函数。
+
+### setupModuleLoader第三层clousure分析
+> 该层clousure也是使用了局部变量invokeQueue作为调用队列， 统一管理调用队列， 这个队列保存了调用对象标识符， 方法名，以及调用参数的详细信息， 通过invokeLater提前注册， 需要时先搜索再调用的原则。
+
+1. config: $injector -> invoke ()
+2. provider: $provider -> provider ()
+3. factory: $provider -> factory ()
+4. service: $provider -> service ()
+5. value: $provider -> value ()
+6. constant: $provider -> constant () | unshift插入模式
+7. filter: $filterProvider -> register ()
+8. controller: $controllerProvider -> register ()
+9. directive: $compileProvider -> register ()
+
+> 在invokeQueue中注册了$injector, $provider, $filterProvider, $controllerProvider, $compileProvider相应的几个方法。
