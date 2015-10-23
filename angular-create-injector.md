@@ -79,3 +79,133 @@ function createInjector(modulesToLoad) {
 2. loadModules
 
 
+#### createInternalInjector()
+```
+function createInternalInjector(cache, factory) {
+  ...
+  
+  return {
+    invoke: invoke,
+    instantiate: instantiate,
+    get: getService,
+    annotate: annotate
+  };
+}
+```
+> createInternalInjector函数返回操作集合对象：包括invoke, instantiate, get, annotate方法。
+
+##### 1. getService(serviceName): 获取给定服务
+```
+function getService(serviceName) {
+  if (typeof serviceName !== 'string') {
+    throw Error('Service name expected');
+  }
+  if (cache.hasOwnProperty(serviceName)) {
+    if (cache[serviceName] === INSTANTIATING) {
+      throw Error('Circular dependency: ' + path.join(' <- '));
+    }
+    return cache[serviceName];
+  } else {
+    try {
+      path.unshift(serviceName);
+      cache[serviceName] = INSTANTIATING;
+      return cache[serviceName] = factory(serviceName);
+    } finally {
+      path.shift();
+    }
+  }
+}
+```
+> angular通过缓存集中管理服务，获取服务的单个实例， 实现服务的单例模式。 其中provider在获取服务之前已经缓存起来， 因此要么获取到，要么抛出异常；而对于实例对象服务， 提供了创建服务的factory, 如果缓存中有， 则直接获取， 否则需要先通过factory产生一个实例，然后放入缓存并返回。
+
+##### 2. annotate()
+```
+var FN_ARGS = /^function\s*[^\(]*\(\s*([^\)]*)\)/m;
+var FN_ARG_SPLIT = /,/;
+var FN_ARG = /^\s*(_?)(\S+?)\1\s*$/;
+var STRIP_COMMENTS = /((\/\/.*$)|(\/\*[\s\S]*?\*\/))/mg;
+function annotate(fn) {
+  var $inject,
+      fnText,
+      argDecl,
+      last; 
+
+  if (typeof fn == 'function') {
+    if (!($inject = fn.$inject)) {
+      $inject = []; 
+      fnText = fn.toString().replace(STRIP_COMMENTS, '');
+      argDecl = fnText.match(FN_ARGS);
+      forEach(argDecl[1].split(FN_ARG_SPLIT), function(arg){
+        arg.replace(FN_ARG, function(all, underscore, name){
+          $inject.push(name);
+        });   
+      });   
+      fn.$inject = $inject;
+    }
+  } else if (isArray(fn)) {
+    last = fn.length - 1;
+    assertArgFn(fn[last], 'fn');
+    $inject = fn.slice(0, last);
+  } else {
+    assertArgFn(fn, 'fn', true);
+  }
+  return $inject;
+}
+```
+
+##### 3. invoke(): 
+```
+function invoke(fn, self, locals){
+  var args = [], 
+      $inject = annotate(fn),
+      length, i,
+      key;  
+
+  for(i = 0, length = $inject.length; i < length; i++) {
+    key = $inject[i];
+    args.push(
+      locals && locals.hasOwnProperty(key)
+      ? locals[key]
+      : getService(key)
+    );    
+  }     
+  if (!fn.$inject) {
+    // this means that we must be an array.
+    fn = fn[length];
+  }     
+
+
+  // Performance optimization: http://jsperf.com/apply-vs-call-vs-invoke
+  switch (self ? -1 : args.length) {
+    case  0: return fn(); 
+    case  1: return fn(args[0]);
+    case  2: return fn(args[0], args[1]);
+    case  3: return fn(args[0], args[1], args[2]);
+    case  4: return fn(args[0], args[1], args[2], args[3]);
+    case  5: return fn(args[0], args[1], args[2], args[3], args[4]);
+    case  6: return fn(args[0], args[1], args[2], args[3], args[4], args[5]);
+    case  7: return fn(args[0], args[1], args[2], args[3], args[4], args[5], args[6]);
+    case  8: return fn(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7]);
+    case  9: return fn(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8]);
+    case 10: return fn(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9]);
+    default: return fn.apply(self, args);
+  }
+}
+```
+##### 4. instantiate()
+```
+function instantiate(Type, locals) {
+  var Constructor = function() {},
+      instance, returnedValue;
+
+  // Check if Type is annotated and use just the given function at n-1 as parameter
+  // e.g. someModule.factory('greeter', ['$window', function(renamed$window) {}]);
+  Constructor.prototype = (isArray(Type) ? Type[Type.length - 1] : Type).prototype;
+  instance = new Constructor();
+  returnedValue = invoke(Type, instance, locals);
+
+  return isObject(returnedValue) ? returnedValue : instance;
+}
+```
+
+
