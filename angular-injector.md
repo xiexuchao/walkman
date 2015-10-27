@@ -6,3 +6,27 @@
 > createInjector在设置了一些属性后， 然后返回一个instanceInjector对象。
 
 ### instanceInjector
+> instanceInjector是一个对象， 有下面的函数属性:
+```
+    return {
+      invoke: invoke,
+      instantiate: instantiate,
+      get: getService,
+      annotate: createInjector.$$annotate,
+      has: function(name) {
+        return providerCache.hasOwnProperty(name + providerSuffix) || cache.hasOwnProperty(name);
+      }   
+    };
+```
+
+> 首先我们转向下面这些方法。
+1. [annotate]()
+2. [invoke]()
+3. [get]()
+4. [instantiate]()
+
+> 然后我们再将所有的串起来， 深入研究下createInjector方法，看看injector如何设置及使用的。[the twin injectors](http://taoofcode.net/studying-the-angular-injector/)
+
+> 最后我们深入看看使用injector模块是如何加载，以及服务是如何注册的。[loadModules](http://taoofcode.net/studying-the-angular-injector/)
+
+> 本来想自己写的， 发现这位哥写的超有条例， 就边读代码边翻译了。 [参考链接](http://taoofcode.net/studying-the-angular-injector/)
