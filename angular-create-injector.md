@@ -67,3 +67,10 @@ function createInjector(modulesToLoad) {
     // 此处略去千万行
 }
 ```
+
+> 当angular创建injector的时候， 实际上创建了两个注入器providerInjector, instanceInjector. createInternalInjector()的第一个参数为查询实例(简单对象)的缓存。 第二个参数为工厂方法。 工厂方法用于在服务不在缓存的时候创建服务的。
+
+### instanceInjector
+> instanceInjector是当调用createInjector时候返回的注入器。 instanceInjector保存了系统中初始化服务。是使用空对象初始化的。 providerInjector维护了未初始化服务。
+
+> 
