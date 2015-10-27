@@ -189,6 +189,15 @@ function annotate(fn) {
 
 ---------------
 ###### annotate详解
+> Angular为了能让injector知道给特定函数注入哪些参数， 需要参数的列表。 这个功能是通过annotate来实现的。
+
+> 在angular中，有三种不同方式注解你的方法:
+
+>> 使用数组。 数组的最后一个元素是函数， 数组的其他元素为参数名称。 例如
+```
+  ['$scope', '$q', function($scope, $q){}]
+```
+
 ```
 function assertArg(arg, name, reason) {
   if (!arg) {
