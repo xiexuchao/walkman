@@ -35,5 +35,17 @@ plum.beNiceTo();
 
 > 非常有用， 但是使用apply的问题是它仅仅在你想要调用函数的时候才会工作。 没有办法混合new和apply. 注入器使用了一种比较聪明的方式解决这个问题。
 
+```
+    function instantiate(Type, locals, serviceName) {
+      // Check if Type is annotated and use just the given function at n-1 as parameter
+      // e.g. someModule.factory('greeter', ['$window', function(renamed$window) {}]);
+      // Object creation: http://jsperf.com/create-constructor/2
+      var instance = Object.create((isArray(Type) ? Type[Type.length - 1] : Type).prototype || null);
+      var returnedValue = invoke(Type, instance, locals, serviceName);
+
+      return isObject(returnedValue) || isFunction(returnedValue) ? returnedValue : instance;
+    }
+```
+
 
 
