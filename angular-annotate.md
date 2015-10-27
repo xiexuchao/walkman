@@ -70,3 +70,13 @@ function annotate(fn, strictDi, name) {
   return $inject;
 }
 ```
+
+> annotate()可以接收数组参数，也可以接收函数参数。
+
+> 如果传入数组参数， annotate假设落入第一种形式的情况：`['$scope', function($scope){}]`. 这种情况下， 我们断言数组的最后一个元素为函数， 然后删除最后一个元素， 返回数组。
+
+> 如果仅仅传入一个函数， 首先检查函数是否已经通过设置属性$inject注解过。`if (!($inject = fn.$inject)) {`
+
+> 如果没有，我们需要通过函数自身定义来提取参数。 代码的这部分让我们通过正则表达式进行一次有意义的旅行。
+
+> angular利用调用函数toString()的优势事实， 来返回函数定义的完整文本。 
