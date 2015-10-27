@@ -71,6 +71,46 @@ function createInjector(modulesToLoad) {
 > 当angular创建injector的时候， 实际上创建了两个注入器providerInjector, instanceInjector. createInternalInjector()的第一个参数为查询实例(简单对象)的缓存。 第二个参数为工厂方法。 工厂方法用于在服务不在缓存的时候创建服务的。
 
 ### instanceInjector
-> instanceInjector是当调用createInjector时候返回的注入器。 instanceInjector保存了系统中初始化服务。是使用空对象初始化的。 providerInjector维护了未初始化服务。
+> instanceInjector是当调用createInjector时候返回的注入器。 
+>> instanceInjector保存了系统中初始化服务。是使用空对象初始化的。 providerInjector维护了未初始化服务。
 
-> 
+> 看看instance注入器的工厂函数， 当我们仕途获取一个还没有初始化当服务的时候，我们将在providerInjector中使用名字servicename + providerSuffix的服务名。 providerSuffix是Provider. 当有的话， 就调用provider对象的$get函数。
+
+> 这里有两个假设前提：
+
+1. 所有的存储在providerInjector的服务都是以Provider为后缀的。
+2. 所有存储在providerInjector里边的服务都是使用$get函数获取的对象。
+
+### providerInjector
+> 让我们看看providerInjector是如何设置的。
+
+> providerInjector的缓存都是使用一个服务-- $provide来初始化的：
+
+```
+  providerCache = {
+    provider: supportObject(provider),
+    factory: supportObject(factory),
+    service: supportObject(service),
+    value: supportObject(value),
+    constant: supportObject(constant),
+    decorator: decorator
+  }
+```
+
+> providerInject上面的$provide服务默认总是可用的。 其他的服务都是通过这个服务注册的。
+
+> supportObject()方法
+
+```
+  function supportObject(delegate) {
+    return function(key, value) {
+      if (isObject(key)) {
+        forEach(key, reverseParams(delegate));
+      } else {
+        return delegate(key, value);
+      }
+    };
+  }
+```
+
+> 这是非常普通的javascript模式。 一个函数捕获一个变量， 然后返回另外一个函数。
