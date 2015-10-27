@@ -26,7 +26,7 @@
 3. [get](https://github.com/walkerqiao/walkman/blob/master/angular-injector-get.md)
 4. [instantiate](https://github.com/walkerqiao/walkman/blob/master/angular-injector-instantiate.md)
 
-> 然后我们再将所有的串起来， 深入研究下createInjector方法，看看injector如何设置及使用的。[the twin injectors](http://taoofcode.net/studying-the-angular-injector/)
+> 然后我们再将所有的串起来， 深入研究下createInjector方法，看看injector如何设置及使用的。[the twin injectors](https://github.com/walkerqiao/walkman/blob/master/angular-createInjector.md)
 
 > 最后我们深入看看使用injector模块是如何加载，以及服务是如何注册的。[loadModules](http://taoofcode.net/studying-the-angular-injector/)
 
