@@ -113,4 +113,79 @@ function createInjector(modulesToLoad) {
   }
 ```
 
-> 这是非常普通的javascript模式。 一个函数捕获一个变量， 然后返回另外一个函数。
+> 这是非常普通的javascript模式。 一个函数捕获一个变量(这里是delegate)， 然后返回另外一个函数。
+
+> 从supportObject返回的函数会应用delegate到函数参数上， 或者传入的对象，将delegate应用到传入对象的每个字段上面。
+
+> 传入的delegate在函数里边处理provider、factory、service、value或者constant的创建。 它们每个的工作稍微有点不同， 但是都是向providerCache添加一个命名为*Provider的服务，并且具有一个$get成员方法。
+
+#### provider
+```
+  function provider(name, provider_) {
+    assertNotHasOwnProperty(name, 'service');
+    if (isFunction(provider_) || isArray(provider_)) {
+      provider_ = providerInjector.instantiate(provider_);
+    }   
+    if (!provider_.$get) {
+      throw $injectorMinErr('pget', "Provider '{0}' must define $get factory method.", name);
+    }   
+    return providerCache[name + providerSuffix] = provider_;
+  }
+```
+
+> 如果给定的provider是函数或者数组，那么这个provider被调用。 然后我们验证确保provider具有$get属性， 然后该对象被添加到providerCache中去。
+
+#### factory
+```
+  function factory(name, factoryFn, enforce) {
+    return provider(name, {
+      $get: enforce !== false ? enforceReturnValue(name, factoryFn) : factoryFn
+    }); 
+  }
+```
+
+> factory仅仅是创建一个带有$get属性的provider, 这个属性指向传入的factoryFn.
+
+#### service
+```
+  function service(name, constructor) {
+    return factory(name, ['$injector', function($injector) {
+      return $injector.instantiate(constructor);
+    }]);
+  }
+```
+> 服务service创建了一个factory. 该方法是备注了去检索$injector对象的。 注入器用于初始化传入service()的constructor的实例。
+
+#### value
+```function value(name, val) { return factory(name, valueFn(val), false); }```
+
+> value创建使用返回传入值val的函数创建一个工厂。
+
+#### constant
+```
+  function constant(name, value) {
+    assertNotHasOwnProperty(name, 'constant');
+    providerCache[name] = value;
+    instanceCache[name] = value;
+  }
+```
+
+> constant打破了$get和provider后缀的规则。 给定的value直接同时设置到provider和instance缓存， 因为初始化constant没有任何需要处理的。
+
+> 那么为什么它们要实现这样的双胞胎注入器解决方案呢? 它们不能把初始化和未初始化的服务合并到一个注入器吗? 它们到名字已经通过provider后缀在未初始化的服务上做了区别。
+
+> 其中一个原因就是隐藏功能性。 假设你想要使用注入器直接注册一个服务。 如果试图这样做， 你可能会这样做:
+
+```
+var injector = angular.injector();
+injector.get('$provider').value('myValue', 3.14);
+// Error: [$injector:unpr] Unknown provider: $providerProvider <- $provider
+```
+
+> 你只能访问instanceInjector. 当在providerInjector查找的时候， 那么就会在名字上面添加Provider后缀。 那么就会尝试查找$providerProvider, 那么当然不存在了。
+
+> 如果我们不能访问$provider, 那么我们怎么能使用注入器注册我们自己的服务呢？
+
+> 这些都是通过模块完成的。 angular中所有的服务设置必须附加到特定到模块， 这也是唯一的使用注册器注册服务的方式。
+
+> [loadModules]()
