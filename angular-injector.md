@@ -22,9 +22,9 @@
 > 首先我们转向下面这些方法。
 
 1. [annotate](https://github.com/walkerqiao/walkman/blob/master/angular-annotate.md)
-2. [invoke]()
-3. [get]()
-4. [instantiate]()
+2. [invoke](https://github.com/walkerqiao/walkman/blob/master/angular-invoke.md)
+3. [get](https://github.com/walkerqiao/walkman/blob/master/angular-injector-get.md)
+4. [instantiate](https://github.com/walkerqiao/walkman/blob/master/angular-injector-instantiate.md)
 
 > 然后我们再将所有的串起来， 深入研究下createInjector方法，看看injector如何设置及使用的。[the twin injectors](http://taoofcode.net/studying-the-angular-injector/)
 
