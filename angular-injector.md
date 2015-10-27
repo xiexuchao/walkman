@@ -20,7 +20,8 @@
 ```
 
 > 首先我们转向下面这些方法。
-1. [annotate]()
+
+1. [annotate](https://github.com/walkerqiao/walkman/blob/master/angular-annotate.md)
 2. [invoke]()
 3. [get]()
 4. [instantiate]()
