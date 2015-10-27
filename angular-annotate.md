@@ -126,4 +126,4 @@ arg.replace(FN_ARG, function(all, underscore, name){
 
 > 那么现在我们有了参数的列表， injector能使用它们来定位注入到我们函数的值了。
 
-> 下一篇 [invoke]()
+> 下一篇 [invoke](https://github.com/walkerqiao/walkman/blob/master/angular-invoke.md)
