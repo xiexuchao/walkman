@@ -32,8 +32,26 @@
   2. 将:, -或_分割的名称转换为驼峰状。
 
 
+  例如， 下面的各种形式都是等价的，都是匹配ngBind指令的。
+```
+// index.html
+<div ng-controller="Controller">
+  Hello <input ng-model="name"> <hr />
+  <span ng-bind="name"></span> <br />
+  <span ng:bind="name"></span> <br />
+  <span ng_bind="name"></span> <br />
+  <span data-ng-bind="name"></span> <br />
+  <span x-ng-bind="name"></span> <br />
+</div>
+```
 
-
+```
+// script.js
+angular.module('docsBindExample', [])
+.controller('Controller', ['$scope', function($scope) {
+  $scope.name = 'Max Karl Ernst Ludwig Planck (...)';
+}]);
+```
   
 ## 参考链接
 1. [Creating Custom Directives](https://docs.angularjs.org/guide/directive)
