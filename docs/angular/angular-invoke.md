@@ -92,4 +92,4 @@
 
 > 缓存中的服务入口设置，开始先占位为INSTANTIATING, 然后factory函数带哦用来创建服务， 结果存放在缓存中， 并返回结果值。
 
-> [instantiate](https://github.com/walkerqiao/walkman/edit/master/docs/angular/angular-injector-instantiate.md)
+> [instantiate](https://github.com/walkerqiao/walkman/master/docs/angular/angular-injector-instantiate.md)
