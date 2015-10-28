@@ -101,6 +101,184 @@ angular.module('docsBindExample', [])
   例如， 要绑定viewBox, 我们可以写: `<svg ng-attr-view_box="{{viewBox}}"></svg>`
 
 ## 创建指令
+  首先让我们讨论下注册指令的API. 非常类似控制器， 指令也是在模块上注册的。 要注册一个指令， 可以使用module.directive API. module.directive接收标准化指令名称， 后面跟着工厂方法。 这个工厂方法必须返回一个对象， 使用不同的选项告诉$compile当匹配到指令的时候行为如何。
+  
+> ### 最佳实践:
+> 优先使用定义对象， 其次是返回一个函数。
+
+  我们将一些指令的通用例子， 然后深入到不同到选项和编译处理过程中。
+  
+> ### 最佳实践:
+> 为了避免和将来标准冲突， 最好为你自己的指令定义个前缀。 例如，如果你创建一个<carousel>指令， 那么在html7中可能会有问题， 因为那里有这个元素。 两三个字符前缀即可。 同时，你不要使用ng或者可能和angular将来版本的指令相冲突的前缀字符串。
+
+  下面的例子中， 我们使用前缀my(eg: myCustomer)
+  
+## 模版扩展指令
+  假设你有一片展示客户信息的模版。 这个模块在代码中会多次重复。 修改一个地方， 其他多个地方都会修改。 这就是使用指令扩展模版的好机会。
+  
+  让我们创建一个指令简单使用静态模版替换它的内容。
+```
+// script.js
+angular.module('docsSimpleDirective', [])
+.controller('Controller', ['$scope', function($scope){
+  $scope.customer = {
+    name: 'Naomi',
+    address: '1600 Ampitheatre'
+  };
+}])
+.directive('myCustomer', function(){
+  return {
+    template: 'Name: {{customer.name}} Address: {{customer.address}}'
+  };
+});
+```
+
+```
+/** index.html **/
+<div ng-controller="Controller">
+  <div my-customer></div>
+</div>
+```
+
+  注意我们已经绑定的这个指令。 在$compile编译和链接<div my-customer></div>后， 将尝试匹配元素子元素指令。 这就是说可能和其他指令组合起来。 后面的例子我们将会看到如何实现的。
+  
+> ### 最佳实践:
+> 除非你的模版非常的小，否则一般更推荐将模版分离到单个的html文件中， 然后使用templateUrl选项来定位模版。
+
+  如果你熟悉ngInclude指令，templateUrl和它工作原理类似。 下面使用templateUrl来替代实现的:
+
+```
+angular.module('docsSimpleDirective', [])
+.controller('Controller', ['$scope', function($scope){
+  $scope.customer = {
+    name: 'Naomi',
+    address: '1600 Ampitheatre'
+  };
+}])
+.directive('myCustomer', function(){
+  return {
+    templateUrl: 'path/to/my-customer.html'
+  };
+});
+```
+
+  templateUrl也可以是一个函数， 返回要加载使用到指令的html模版的URL. angular调用templateUrl带有两个参数: 指令调用的元素element和元素相关的属性attr.
+
+> ### 注意:
+> 当前你还没有能力从templateUrl访问作用域scope变量, 因为模版请求是在作用域初始化之前发生的。
+
+```
+angular.module('docsSimpleDirective', [])
+.controller('Controller', ['$scope', function($scope){
+  $scope.customer = {
+    name: 'Naomi',
+    address: '1600 Ampitheatre'
+  };
+}])
+.directive('myCustomer', function(){
+  return {
+    templateUrl: function(elem, attr) {
+      return 'customer-' + attr.type + '.html';
+    }
+  };
+});
+```
+
+```
+<div ng-controller="Controller">
+  <div my-customer type="name"></div>
+  <div my-customer type="address"></div>
+</div>
+```
+
+> ### 注意:
+> 当你创建指令的时候，默认是限制在属性和元素上的。 为了创建在类名和注释上面的指令，需要使用restrict选项。
+
+  restrict选项一般设置值有如下几种:
+  * 'A': 仅仅匹配属性名称
+  * 'E': 仅仅匹配元素名
+  * 'C': 仅仅匹配类名
+  * 'M': 仅仅匹配注释指令
+
+  这些指令可以按需要组合: 'AEC': 匹配元素、类名或属性名。
+  
+> 那么什么时候我们使用属性指令，什么时候使用元素指令呢? 
+> 当创建控制模版的组件指令的时候使用元素指令。 通常场景是当你为模版创建特定领域语言的时候。 
+> 当对既有元素做下修饰，让它实现新的功能的时候，可以使用属性指令。
+
+  前面使用元素指令作为myCustomer指令的选择是正确的， 因为你不是在修饰元素，让它具有一些customer属性， 而是定义元素作为customer组件的核心行为。
+
+## 孤立指令作用域(isolating the scope of a directive)
+  我们的myCustomer指令很好，但是有致命缺陷。 我们在给定作用域下面只能使用一次。
+  当前的实现我们需要，为了能复用这个指令，需要为每个指令创建一个类似的控制器。
+  
+```
+angular.module('docsSimpleDirective', [])
+.controller('NaomiController', ['$scope', function($scope){
+  $scope.customer = {
+    name: 'Naomi',
+    address: '1600 Ampitheatre'
+  };
+}])
+.controller('IgorController', ['$scope', function($scope){
+  $scope.customer = {
+    name: 'Igor',
+    address: '123 somewhere'
+  };
+}])
+.directive('myCustomer', function(){
+  return {
+    templateUrl: 'path/to/my-customer.html'
+  };
+});
+
+/** index.html **/
+<div ng-controller="NaomiController">
+  <my-customer></my-customer>
+</div>
+<div ng-controller="IgorController">
+  <my-customer></my-customer>
+</div>
+```
+
+  明显这不是一个很好的解决方案。
+  我们希望有能力在指令内部和外部作用域做区别， 然后将外部作用域映射到指令的内部作用域。 我们可以通过所谓的孤立作用域来实现它。 使用指令的scope选项即可。
+  
+```
+angular.module('docsSimpleDirective', [])
+.controller('Controller', ['$scope', function($scope){
+  $scope.naomi = {
+    name: 'Naomi',
+    address: '1600 Ampitheatre'
+  };
+  $scope.naomi = {
+    name: 'Igor',
+    address: '123 somewhere'
+  };
+}])
+.directive('myCustomer', function(){
+  return {
+    restrict: 'E',
+    scope: {
+      customerInfo: '=info'
+    },
+    templateUrl: 'path/to/my-customer.html'
+  };
+});
+
+<div ng-controller="Controller">
+  <my-customer info="naomi"></my-customer><hr />
+  <my-customer info="igor"></my-customer>
+</div>
+```
+
+  看看上面的html可知道，第一个<my-customer>使用info='naomi', 第二个使用info='igor', 暴露的是控制器的作用域。 
+  再看看scope选项： `scope: { customerInfo: '=info'}`.
+  
+  scope选项是一个对象， 包含了每个隔离作用域绑定的属性。 上面例子只有一个隔离属性：
+  * 名字为customerInfo, 对应于指令的隔离作用域属性customerInfo
+  * 它的值为=info, 告诉$compile绑定到info属性。
+
 
 ## 参考链接
 1. [Creating Custom Directives](https://docs.angularjs.org/guide/directive)
