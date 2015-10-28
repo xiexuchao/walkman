@@ -52,6 +52,8 @@ angular.module('docsBindExample', [])
   $scope.name = 'Max Karl Ernst Ludwig Planck (...)';
 }]);
 ```
+
+> ##最佳实践:
   
 ## 参考链接
 1. [Creating Custom Directives](https://docs.angularjs.org/guide/directive)
