@@ -53,7 +53,8 @@ angular.module('docsBindExample', [])
 }]);
 ```
 
-> ##最佳实践:
+> #### 最佳实践:
+> 优先使用中划线分割格式(eg: ng-bind -> ngBind). 如果你想要使用
   
 ## 参考链接
 1. [Creating Custom Directives](https://docs.angularjs.org/guide/directive)
