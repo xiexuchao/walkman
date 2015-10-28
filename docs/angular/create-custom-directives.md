@@ -75,7 +75,32 @@ angular.module('docsBindExample', [])
 > 注释指令通常用于那些DOM API限制了创建指令的能力，因为需要跨越多个元素。(eg: 在`<table>`元素中)。 AngularJS 1.2介绍了ng-repeat-start和ng-repeat-end作为较好的解决这类问题的方式。鼓励开发者在必要的时候使用注释指令。
 
 ## 文本和属性绑定
+  在编译器匹配文本和属性的编译过程中，使用$interpolate服务来查看是否嵌套表达式。这些表达式被注册为$watch, 并且作为正常$digest循环的一部分更新。插值(interpolation)类似：`<a ng-href="img/{{username}}.jpg">Hello {{username}}</a>`
+  
+## ngAttr属性绑定
+  Web浏览器有时候会挑剔什么属性值是有效的。
+  例如， 考虑下面的模版:
+```
+<svg>
+  <circle cx="{{cx}}"></circle>
+</svg>
+```
+  我们期望angular能绑定这个， 但是当我们检查控制面板的时候会发现如下错误`Error: Invalid value for attribute cx="{{cx}}"`, 因为svg dom api的限制， 不能简单写cx="{{cx}}", 使用ng-attr-cx, 可以解决这个问题。
+  
+  如果属性绑定是使用ngAttr前缀前置的(示例ng-attr-), 然后在绑定它的过程中，会应用相应无前缀属性。 这样就允许你绑定你想要的属性， 急切应付浏览器处理(比如svg元素的circle[cx]属性)。 当使用ngAttr的时候，$interpolate使用所有标签或者什么标签都不适用， 因此如果差值字符串的任何表达式结果为undefined, 属性被删除并不添加到元素上。
+  
+  例如， 我们可以通过下面方式修复上面的问题:
+```
+<svg>
+  <circle ng-attr-cx="{{cx}}"></circle>
+</svg>
+```
 
+  如果希望修改驼峰状属性(svg元素有合法驼峰状属性), 比如svg的viewBox属性， 那么他可以使用下划线来表示这个属性来绑定它的自然驼峰状属性。
+  
+  例如， 要绑定viewBox, 我们可以写: `<svg ng-attr-view_box="{{viewBox}}"></svg>`
+
+## 创建指令
 
 ## 参考链接
 1. [Creating Custom Directives](https://docs.angularjs.org/guide/directive)
