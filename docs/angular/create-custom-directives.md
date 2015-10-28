@@ -9,7 +9,23 @@
 
 > 编译HTML模版到底是什么意思? 对AngularJS来说，编译意思是附加指令到HTML上，使得HTML具有交互性。 我们这里使用术语"compile"，原因是递归处理附加指令借鉴于编译编程语言的源代码编译。
 
+## 指令匹配
+  在我们写指令之前，需要了解Angular HTML编译器如何确定什么时候使用特定指令。
+  
+  类似元素匹配选择器时候使用的术语， 我们说元素在指令为元素声明的一部分时该元素匹配这个指令。
+
+  下面的这个例子， 我们可以说<input>元素匹配ngModel指令。
+`<input ng-model="foo">`
+
+  下面的例子，<input>元素也匹配ngModel指令：
+`<input data-ng-model="foo">`
+  
+  而下面的元素匹配person指令：
+`<person>{{name}}</person>`
+
+## 规范
 
 
+  
 ## 参考链接
 1. [Creating Custom Directives](https://docs.angularjs.org/guide/directive)
