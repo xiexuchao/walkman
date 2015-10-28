@@ -54,7 +54,28 @@ angular.module('docsBindExample', [])
 ```
 
 > #### 最佳实践:
-> 优先使用中划线分割格式(eg: ng-bind -> ngBind). 如果你想要使用
+> 优先使用中划线分割格式(eg: ng-bind -> ngBind). 如果你要使用HTML验证工具， 你可以使用data-前置版本替代。(eg: data-ng-bind -> ngBind). 接收上面展示的其他形式主要是历史遗留问题， 因此建议避免使用它们。
+
+## 指令类型
+  $compile能基于元素名称、属性、类名、以及注释匹配指令。
   
+  angular提供的所有指令都匹配属性名、标签名、注释或者类名。 下面演示各种可以在模版中引用的不同形式的指令(这个例子为myDir指令)。
+
+```
+<my-dir></my-dir>
+<span my-dir="exp"></span>
+<!-- directive: my-dir exp -->
+<span class="my-dir: exp;"></span>
+```
+  
+> ### 最佳实践：
+> 优先通过标签名和属性来使用指令， 其次考虑注释和类名。这样做容易确定哪个元素匹配哪些指令。
+
+> ### 最佳实践:
+> 注释指令通常用于那些DOM API限制了创建指令的能力，因为需要跨越多个元素。(eg: 在`<table>`元素中)。 AngularJS 1.2介绍了ng-repeat-start和ng-repeat-end作为较好的解决这类问题的方式。鼓励开发者在必要的时候使用注释指令。
+
+## 文本和属性绑定
+
+
 ## 参考链接
 1. [Creating Custom Directives](https://docs.angularjs.org/guide/directive)
