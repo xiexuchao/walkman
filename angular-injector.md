@@ -28,6 +28,6 @@
 
 > 然后我们再将所有的串起来， 深入研究下createInjector方法，看看injector如何设置及使用的。[the twin injectors](https://github.com/walkerqiao/walkman/blob/master/angular-create-injector.md)
 
-> 最后我们深入看看使用injector模块是如何加载，以及服务是如何注册的。[loadModules](http://taoofcode.net/studying-the-angular-injector/)
+> 最后我们深入看看使用injector模块是如何加载，以及服务是如何注册的。[loadModules](https://github.com/walkerqiao/walkman/blob/master/angular-load-modules.md)
 
 > 本来想自己写的， 发现这位哥写的超有条例， 就边读代码边翻译了。 [参考链接](http://taoofcode.net/studying-the-angular-injector/)
