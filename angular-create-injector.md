@@ -188,4 +188,4 @@ injector.get('$provider').value('myValue', 3.14);
 
 > 这些都是通过模块完成的。 angular中所有的服务设置必须附加到特定到模块， 这也是唯一的使用注册器注册服务的方式。
 
-> [loadModules]()
+> [loadModules](https://github.com/walkerqiao/walkman/blob/master/angular-load-modules.md)
