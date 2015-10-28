@@ -279,6 +279,52 @@ angular.module('docsSimpleDirective', [])
   * 名字为customerInfo, 对应于指令的隔离作用域属性customerInfo
   * 它的值为=info, 告诉$compile绑定到info属性。
 
+> ### 注意：
+> scope选项中的=attr属性规范就像指令名称一样。 要绑定到<div bind-to-this="thing">的属性，你需要指定绑定值为=bindToThis.
+
+对于要绑定的属性名和你想要绑定到的指令内作用域的名称相同， 可以使用这样的简短语法`scope:{customer: '='}` <=> `scope:{customer: '=customer'}`
+
+除了使得不同数据绑定到指令内部作用域下面， 使用孤立作用域还有另外一个效果。
+```
+angular.module('docsIsolationExample', [])
+.controller('Controller', ['$scope', function($scope) {
+  $scope.naomi = { name: 'Naomi', address: '1600 Amphitheatre' };
+  $scope.vojta = { name: 'Vojta', address: '3456 Somewhere Else' };
+}])
+.directive('myCustomer', function() {
+  return {
+    restrict: 'E',
+    scope: {
+      customerInfo: '=info'
+    },
+    templateUrl: 'my-customer-plus-vojta.html'
+  };
+});
+
+// index.html
+<div ng-controller="Controller">
+  <my-customer info="naomi"></my-customer>
+</div>
+
+// my-customer.html
+Name: {{customerInfo.name}} Address: {{customerInfo.address}}
+<hr>
+Name: {{vojta.name}} Address: {{vojta.address}}
+```
+
+  vojta.name, vojta.address都是undefined. 虽然我们在控制器中定义了它们， 但是在指令中是不可使用的。
+  
+  正如孤立作用域的名字所示， 指令孤立了所有除了scope中指定的之外的所有模型。 这点对于实现可复用组件非常有用的， 因为它阻止模型状态改变，除非模型明确通过scope传入的。
+  
+> ### 注意:
+> 通常来说， 作用于原型继承父类。 孤立作用域不是这样的。 
+
+> ### 最佳实践
+> 当你在整个应用中创建可复用组件的时候，使用scope选项创建孤立作用域。
+
+
+## 创建操作DOM的指令
+
 
 ## 参考链接
 1. [Creating Custom Directives](https://docs.angularjs.org/guide/directive)
