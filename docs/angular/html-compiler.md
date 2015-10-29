@@ -25,6 +25,8 @@ HTML Compiler
 ## 理解视图
 ![单向绑定视图](https://github.com/walkerqiao/walkman/blob/master/images/One_Way_Data_Binding.png)
 
+![双向绑定视图](https://github.com/walkerqiao/walkman/blob/master/images/Two_Way_Data_Binding.png)
+
   
 
 
