@@ -429,7 +429,60 @@ angular.module('docsTimeDirective', [])
 > 只有在你想创建一个包围其他随意内容的指令的时候才使用transclude选项吧。
 
   下面，我们希望添加一个按钮给对话框， 允许指令绑定它自己的行为到上面。
+```
+angular.module('docsIsoFnBindExample', [])
+.controller('Controller', ['$scope', '$timeout', function($scope, $timeout) {
+  $scope.name = 'Tobias';
+  $scope.message = '';
+  $scope.hideDialog = function (message) {
+    $scope.message = message;
+    $scope.dialogIsHidden = true;
+    $timeout(function () {
+      $scope.message = '';
+      $scope.dialogIsHidden = false;
+    }, 2000);
+  };
+}])
+.directive('myDialog', function() {
+  return {
+    restrict: 'E',
+    transclude: true,
+    scope: {
+      'close': '&onClose'
+    },
+    templateUrl: 'my-dialog-close.html'
+  };
+});
+
+// index.html
+<div ng-controller="Controller">
+  {{message}}
+  <my-dialog ng-hide="dialogIsHidden" on-close="hideDialog(message)">
+    Check out the contents, {{name}}!
+  </my-dialog>
+</div>
+
+// my-dialog-close.html
+<div class="alert">
+  <a href class="close" ng-click="close({message: 'closing for now'})">&times;</a>
+  <div ng-transclude></div>
+</div>
+```
+  我们想要运行的传入函数是在指令作用域下面调用的， 但是它运行在了注册它的作用域上下文。
   
+  前面我们看了如何使用scope, =attr属性， 但是上面的例子， 我们使用的是&attr。 &绑定允许指令触发对表达式计算在原来作用域上面进行， 在特定时间内。 任意合法表达式都是允许的， 包括看函数调用的表达式。 正因为如此， &绑定是给指令行为绑定回调函数的理想方法。
+  
+  当我们点击x的时候，指令的close函数被调用， 这个依赖指令ngClick. 这个调用在孤立作用域下面， 实际计算表达式为原来作用于中的hideDialog(message)， 因此运行的是controller的hideDialog方法。
+  
+  通常我们希望从孤立作用域通过表达式传出一些数据到父作用域， 这样可以通过传递一个map或者局部变量名和值到表达式包装函数里边。 例如， hideDialog函数接受一个message在对话框关闭时来展示它。 这个是通过指令调用close({message: 'closing for now'})。 然后局部变量message可以在on-close表达式中使用。
+  
+> ### 最佳实践：
+> 当你想要指令为绑定行为暴露api的时候，在scope中使用&attr.
+
+## 创建添加事件监听器的指令
+
+
+
 
 ## 参考链接
 1. [Creating Custom Directives](https://docs.angularjs.org/guide/directive)
