@@ -324,7 +324,22 @@ Name: {{vojta.name}} Address: {{vojta.address}}
 
 
 ## 创建操作DOM的指令
+  下面我们创建的指令例子是显示当前时间。 一次一秒， 更新DOM反应当前时间。
+  指令要修改dom一般使用link选项注册DOM监听器以及更新dom. 这是在模版被克隆之后执行， 就是指令逻辑所放的地方执行的。
+  
+  link接受一个函数，具有下面的签名: function link(scope, element, attrs, controller, transcludeFn) {...}.
+  参数及含义如下:
+  * scope: angular scope对象
+  * element: 指令匹配的jqLite包装的元素对象
+  * attrs: 哈希对象，带有key-value对。 规范化的属性名和相应属性值。
+  * controller: 指令引入的控制器实例，或者它自己的控制器(如果有的话)。 具体的值依赖指令的require属性。
+  * transcludeFn: 嵌入链接函数，预先绑定到确切的嵌入域的。
 
+  在我们的link函数中，我们想要每秒更新显示时间， 或者用户改变我们绑定到指令的时间显示格式字符串。 我们使用$interval服务定期调用handler. 比$timeout使用更加容易些， 在端对端测试也工作良好。 我们需要确保所有的$timeout在完成测试之前完成。 我们也希望在指令被删除的时候，删除$interval, 那样我们不会引起内存泄漏。
+  
+```
+angular.module('docsTimeDirective', [])
+```
 
 ## 参考链接
 1. [Creating Custom Directives](https://docs.angularjs.org/guide/directive)
