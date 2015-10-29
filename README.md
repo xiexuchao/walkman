@@ -9,6 +9,7 @@ AngularJS源码分析
 AngularJS相关文档
 =========================
 1. [创建自定义指令](https://github.com/walkerqiao/walkman/blob/master/docs/angular/create-custom-directives.md)
+2. [HTML Compiler](https://github.com/walkerqiao/walkman/blob/master/docs/angular/html-compiler.md)
 
 
 正则表达式
