@@ -480,9 +480,159 @@ angular.module('docsIsoFnBindExample', [])
 > 当你想要指令为绑定行为暴露api的时候，在scope中使用&attr.
 
 ## 创建添加事件监听器的指令
+  之前，我们使用link函数创建了操作dom元素的指令。 我们基于那个例子， 创建一个添加事件监听器的指令。
+  例如，我们想要创建的指令是希望用户能拖动一个元素。
+```
+...
+
+.directive('myDrag', ['$document', function($document){
+  return {
+      link: function(scope, element, attr) {
+          var startX = 0,
+              startY = 0,
+              x = 0,
+              y = 0;
+
+          element.css({
+              position: 'relative',
+              border: '1px solid red',
+              backgroundColor: 'lightgrey',
+              cursor: 'pointer'
+          }); 
+
+          element.on('mousedown', function(event) {
+              event.preventDefault();
+              startX = event.pageX - x;
+              startY = event.pageY - y;
+              $document.on('mousemove', mousemove);
+              $document.on('mouseup', mouseup);
+          }); 
 
 
+          function mousemove(event) {
+              y = event.pageY - startY;
+              x = event.pageX - startX;
 
+              element.css({
+                  top: y + 'px',
+                  left: x + 'px'
+              }); 
+          }   
+
+
+          function mouseup(event) {
+              $document.off('mousemove', mousemove);
+              $document.off('mouseup', mouseup);
+          }   
+      }   
+  };  
+}]);
+```
+
+## 创建通信指令
+  可以在模版中使用组合指令。有时候， 你想要实现一个组合指令。
+  假设你想要一个容器包含多个tabs, 容器仅仅显示当前tab的内容。
+
+```
+得  10:55:57
+  .directive('myTabs', function() {
+    return {
+      restrict: 'E',
+      transclude: true,
+      scope: {},
+      controller: ['$scope', function($scope) {
+        var panes = $scope.panes = [];
+
+        $scope.select = function(pane) {
+          angular.forEach(panes, function(pane) {
+            pane.selected = false;
+          });
+          pane.selected = true;
+        };
+
+        this.addPane = function(pane) {
+          if (panes.length === 0) {
+            $scope.select(pane);
+          }
+          panes.push(pane);
+        };
+      }],
+      templateUrl: 'my-tabs.html'
+    };
+  })
+  .directive('myPane', function() {
+    return {
+      require: '^myTabs',
+      restrict: 'E',
+      transclude: true,
+      scope: {
+        title: '@'
+      },
+      link: function(scope, element, attrs, tabsCtrl) {
+        tabsCtrl.addPane(scope);
+      },
+      templateUrl: 'my-pane.html'
+    };
+  });
+// index.html
+<my-tabs>
+  <my-pane title="Hello">
+    <h4>Hello</h4>
+    <p>Lorem ipsum dolor sit amet</p>
+  </my-pane>
+  <my-pane title="World">
+    <h4>World</h4>
+    <em>Mauris elementum elementum enim at suscipit.</em>
+    <p><a href ng-click="i = i + 1">counter: {{i || 0}}</a></p>
+  </my-pane>
+</my-tabs>
+
+// my-tabs.html
+<div class="tabbable">
+  <ul class="nav nav-tabs">
+    <li ng-repeat="pane in panes" ng-class="{active:pane.selected}">
+      <a href="" ng-click="select(pane)">{{pane.title}}</a>
+    </li>
+  </ul>
+  <div class="tab-content" ng-transclude></div>
+</div>
+
+// my-pane.html
+<div class="tab-pane" ng-show="selected" ng-transclude>
+</div>
+```
+  myPane指令有一个require选项使用的值为^myTabs. 当指令使用这个选项，$compile如果找不到指定的控制器就会抛出error. ^表示指令在它的父类查找这个控制器。(没有^表示指令在自己的元素里边找。)
+  
+  因此myTabs来自哪里? 指令可以指定控制器使用不出人意料的命名controller选项。 上面的myTabs指令使用了这个选项。 就像ngController一样，这个选项附加一个控制器到指令模版上面。
+  
+  如果有必要引用模版中的控制器或绑定到控制器作用域的任意函数， 可以使用选项controllerAs来指定控制器名称作为别名。 指令需要定义为它配置作用域使用。 这个特别有用，当指令用于组件的时候。
+  
+  回过头看看myPanel的定义， 注意link的最后一个参数tabsCtrl, 当指令引用一个控制器， 它会使用link第四个参数来接受这个控制器, 利用这点， myPane可以调用tabsCtrl的addPane方法。
+  
+  如果需要多个控制器， require选项可以接受数组形式， 相应传入link的第四个参数也将为数组。
+  
+```
+angular.module('docsTabsExample', [])
+.directive('myPane', function(){
+  return {
+    require: ['^myTabs', '^ngModel'],
+    restrict: 'E',
+    ...
+    link: function(scope, element, attrs, controllers) {
+      var tabsCtrl = controllers[0],
+          modelCtrl = controllers[1];
+      tabsCtrl.addPane(scope);
+    }
+  };
+});
+```
+  细心的读者可能想要知道link和controller的区别， 基本的不同之处就在于controller可以暴露api, 而link函数能使用require和controller进行交互。
+  
+> ### 最佳实践:
+> 如果你希望你的指令暴露api给其他指令，使用controller, 否则使用link.
+
+## 总结
+  到现在为止， 我们已经看到了指令的主要用例。 这里的每个例子都可以扮演一种你写自定义指令的好开始。
 
 ## 参考链接
 1. [Creating Custom Directives](https://docs.angularjs.org/guide/directive)
