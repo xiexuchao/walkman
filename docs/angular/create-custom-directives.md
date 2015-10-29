@@ -339,7 +339,58 @@ Name: {{vojta.name}} Address: {{vojta.address}}
   
 ```
 angular.module('docsTimeDirective', [])
+.controller('Controller', ['$scope', function($scope) {
+  $scope.format = 'M/d/yy h:mm:ss a';
+}])
+.directive('myCurrentTime', ['$interval', 'dateFilter', function($interval, dateFilter) {
+  function link(scope, element, attrs) {
+      var format,
+          timeoutId;
+
+      function updateTime() {
+          element.text(dateFilter(new Date(), format));
+      }   
+
+      scope.$watch(attrs.myCurrentTime, function(value){
+          format = value;
+          updateTime();
+      }); 
+
+      element.on('$destroy', function(){
+          $interval.cancel(timeoutId);
+      }); 
+
+      timeoutId = $interval(function() {
+          updateTime();
+      }, 1000);
+  }   
+  return {
+      link: link
+  };  
+}]);
+
+
+/** index.html **/
+<div ng-controller="Controller">
+  Date Format: <input ng-model="format" /> <hr />
+  Current Time is: <span my-current-time="format"></span>
+</div>
 ```
+
+  这里有一对事情需要注意。 和module.controller api一样， module.directive函数参数也是依赖注入的。 正是因为如此，我们可以在我们指令内部link函数中使用$interval, dateFilter。
+  我们为元素注册一个事件: element.on('$destroy', ...), 那么什么会触发$destroy事件呢?
+  AngularJS发射少量的特定事件。 当angular编译器编译的节点被销毁的时候， 它会发射一个$destroy事件。 类似的， 当angular 作用域被销毁的时候， 它会广播一个$destroy事件给它的所有监听器。
+  
+  通过监听这个事件， 你可以删除可能导致内存泄漏的事件监听器。 注册到作用域和元素的监听器当它们销毁的时候会自动清理掉， 但是如果在服务中注册了监听器， 或者在DOM节点上注册的监听器不会被删除掉的， 你需要自行清理， 否则可能会引起内存泄漏。
+  
+> ### 最佳实践:
+> 指令在它们最后需要自行清理。 可以使用element.on('$destroy', ...) 或者scope.$on('$destroy', ...)在指令删除的时候来运行清理函数。
+
+## 创建包含其他元素的指令
+  前面的例子我们看到可以使用isolate scope传入模型到指令， 但是有时候，需要有能力传入整个模版而不是字符串或者对象。 让我们这样说， 我想创建一个dialog box组件。 对话框需要能包围任意内容。
+  
+  要实现这点， 需要使用transclude选项。
+
 
 ## 参考链接
 1. [Creating Custom Directives](https://docs.angularjs.org/guide/directive)
