@@ -390,7 +390,46 @@ angular.module('docsTimeDirective', [])
   前面的例子我们看到可以使用isolate scope传入模型到指令， 但是有时候，需要有能力传入整个模版而不是字符串或者对象。 让我们这样说， 我想创建一个dialog box组件。 对话框需要能包围任意内容。
   
   要实现这点， 需要使用transclude选项。
+```
+...
+.directive('myDialog', function() {
+    return {
+        restrict: 'E',
+        transclude: true,
+        template: '<div class="alert" ng-transclude></div>'
+    };  
+}); 
+```
+  选项tansclude到底是做什么的呢? 带有transclude选项的指令具有访问指令外部内容的能力，而非内部。
+  要说明这点， 让我们看看下面的例子。 注意我们添加一个link函数，然后重新定义name为Jeff. 那么你认为{{name}}的绑定如何解决呢?
+```
+.directive('myDialog', function() {
+    return {
+        restrict: 'E',
+        transclude: true,
+        scope: {}, 
+        template: '<div class="alert" ng-transclude></div>',
+        link: function(scope, element) {
+            scope.name = 'Jeff';
+        }   
+    };
+}); 
+```
+  通常来说，我们可能期望{{name}}会是Jeff. 然而， 上面的例子， 我们看到{{name}}绑定的依然是Controller中$scope.name.
+  
+  transclude选项改变了作用域嵌套的方式。使得嵌入指令的内容具有访问指令外部作用域名的能力， 而非指令内部作用域。（其实从名字来看， 嵌入，就是使用父类的作用域，个人理解哈）。这样做，就给了内容访问外部作用域的能力。
+  
+  注意，如果指令不创建自己的作用域scope, 那么scope.name = 'Jeff'会就引用外部作用域， 那么我们将会看到Jeff.
+  
+  综上所述， 就是指令创建了自己的作用域scope:{}, 同时又使用了transclue嵌入选项， 那么，scope私有作用域的改变，不会影响到外部的。
+  
+  这个行为让指令包其他一些内容变得有意义了， 因为你希望传入的模型数据可以单独使用，而不影响外部内容。 如果不得不传入你想使用的模型， 那么你不能真正有随意内容，不是吗?
+  
+> ### 最佳实践:
+> 只有在你想创建一个包围其他随意内容的指令的时候才使用transclude选项吧。
 
+  下面，我们希望添加一个按钮给对话框， 允许指令绑定它自己的行为到上面。
+  
 
 ## 参考链接
 1. [Creating Custom Directives](https://docs.angularjs.org/guide/directive)
