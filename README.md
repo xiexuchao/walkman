@@ -15,3 +15,8 @@ AngularJS相关文档
 正则表达式
 ======================
 [恶补正则表达式](https://github.com/walkerqiao/walkman/blob/master/docs/angular/regexp.md)
+
+
+PS常用效果实现
+==============
+[Photoshop常用效果实现](https://github.com/walkerqiao/walkman/blob/master/docs/photoshop_common.md)
