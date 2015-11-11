@@ -156,4 +156,4 @@ RESTful API设计指南
   
 参考链接
 ================
-[RESTful API规范]()
+[RESTful API规范](http://www.ruanyifeng.com/blog/2014/05/restful_api.html)
