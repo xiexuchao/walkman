@@ -20,3 +20,7 @@ AngularJS相关文档
 PS常用效果实现
 ==============
 [Photoshop常用效果实现](https://github.com/walkerqiao/walkman/blob/master/docs/photoshop_common.md)
+
+NodeJS
+=================================
+[使用 Node.js 开发基于 JavaScript 的 RESTful 应用](https://www.ibm.com/developerworks/cn/web/1211_zuochao_nodejsrest/)
