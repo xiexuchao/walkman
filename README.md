@@ -24,3 +24,7 @@ PS常用效果实现
 NodeJS
 =================================
 [使用 Node.js 开发基于 JavaScript 的 RESTful 应用](https://www.ibm.com/developerworks/cn/web/1211_zuochao_nodejsrest/)
+
+RESTful API相关
+============
+[RESTful API设计指南](https://github.com/walkerqiao/walkman/blob/master/docs/restful_api.md)
