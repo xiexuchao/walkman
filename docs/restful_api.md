@@ -151,7 +151,7 @@ RESTful API设计指南
 
 十一. 其他
 ==============
-  API的身份认证应该使用[OAuth 2.0]()框架
+  API的身份认证应该使用[OAuth 2.0](https://github.com/walkerqiao/walkman/blob/master/docs/oauth.md)框架
   服务器返回的数据格式，应该尽量使用JSON, 避免使用XML.
   
 参考链接
