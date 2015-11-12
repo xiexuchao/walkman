@@ -176,6 +176,26 @@ OAuth的思路
 |                 | <------ 5. Access Token (Optional Refresh Token) ------------------------+
 +-----------------+
 ```
+  1. 用户访问客户端，后者将前者导向认证服务器。
+  2. 用户选择是否给予客户端授权。
+  3. 假设用户给予授权， 认证服务器将用户导向客户端事先指定的"重定向URI"(redirection URI), 同时附上一个授权码。
+  4. 客户端收到授权码， 附上早先的"重定向URI", 向认证服务器申请令牌。 这一步是在客户端的后台服务器上完成的， 对用户不可见。
+  5. 认证服务器核对了授权码和重定向URI, 确认无误后，向客户端发送访问令牌(access token)和更新令牌(refresh token).
+
+  下面是上面这些步骤所需要的参数：
+  第一步中，客户端申请认证的URI, 包含以下参数:
+  * response_type: 表示授权类型、比选项。 此处的值固定为"code"
+  * client_id: 表示客户端的ID, 比选项。
+  * redirect_uri: 表示重定向URI, 可选项。
+  * scope: 表示申请的权限范围， 可选项。
+  * state: 表示客户端的当前状态，可以指定任意值， 认证服务器会原封不动返回这个值。
+
+  下面是一个例子：
+```
+  GET /authorize?response_type=code&client_id=s6BhdRkqt3&state=xyz&redirect_uri=https%3A%2Fclient%2Eexample%2Ecom%2Fcb HTTP/1.1
+  Host: server.example.com
+```
+
 
 参考链接
 ============
