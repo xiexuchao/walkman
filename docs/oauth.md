@@ -140,7 +140,42 @@ OAuth的思路
   
 客户端授权模式
 -----------------
+  客户端必须得到用户对授权(authorization grant), 才能获得令牌(access token). OAuth 2.0定义了四种授权方式。
+  1. 授权码模式(authorization code)
+  2. 简化模式(implicit)
+  3. 密码模式(resource owner password credentials)
+  4. 客户端模式(client credentials)
 
+授权码模式
+-----------
+  授权码模式是功能最完整、流程最严密的授权模式。 它的特点就是通过客户端的后台服务器，与服务提供商的认证服务器进行互动。
+  
+```
++-----------------+
+| Resource Owner  |
++-----------------+
+0        ^
+0        |
+0       (2)
+0        |
++-----------------+                                                          +-------------------+
+|                 | >------ 1. Client Identifier & Redirection URI ------->  |                   |
+|                 |                                                          |   Authorization   |
+|    User Agent   | >------ 2. User Authorization ------------------------>  |                   |
+|                 |                                                          |      Server       |
+|                 | <------ 3. Authorization Code ------------------------<  |                   |
++-----------------+                                                          +-------------------+
+0   ^         |                                                                ^             V
+0   |         |                                                                |             |
+0  (1)       (3)                                                               |             |
+0   |         |                                                                |             |
+0   |         V                                                                |             |
++-----------------+                                                            |             |
+|                 | >------ 4. Authorization Code & Redirection URI -----------+             |
+|     Client      |                                                                          |
+|                 | <------ 5. Access Token (Optional Refresh Token) ------------------------+
++-----------------+
+```
 
 参考链接
 ============
