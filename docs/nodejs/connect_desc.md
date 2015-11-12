@@ -147,3 +147,72 @@ MVC目录
   |------ test            // 单元测试目录
   |------ views           // 视图层目录
 ```
+
+
+深入了解中间件
+=================
+
+  如果把http处理过程比作污水处理， 中间件就像是一层层过滤网。 每个中间件在http处理过程中通过改写request或/和response的数据、状态，实现了特定的功能。 这些功能十分广泛， 下图列出了connect所有内置中间件和部分第三方中间件。这里是完整的[中间件列表](https://github.com/senchalabs/connect/wiki).
+  
+  下图根据中间件在整个http处理流程中的位置，将中间件大致分为3类:
+  1. Pre-Request: 通常用来改写request的原始数据
+  2. Request/Response: 大部分中间件都在这里， 功能各异
+  3. Post-Response: 全局异常处理，改写response数据等
+
+```
+0                                                   +----------- timeout
+0                                                   |----------- limit
+0                     +------------------+          |----------- vhost
+0             +-------| Pre-Request      |----------+----------- query
+0             |       +------------------+          |----------- Header -------- methodOverride
+0             |
+0             |                                                                                     |--- multipart
+0             |                                     +----------- Dynamic Page ------- bodyParse ----+--- json
+0             |                                     |                                               |--- urlencoded
+0             |                                     |
+0             |                                     |
+0             |                                     |                               |------ static ----- staticCache
+0             |                                     |----------- Static Page -------+------ directory
+0             |                                     |                               |------ favicon
+0             |                                     |
+0             |                                     |
+0             |                                     |                       |------- cookieParser
+0             |                                     |                       |
+0             |                                     |                       |
+0             |                                     |                       |             |-- connect-mysql
+0             |                                     |-- Static Management --+-- session --+-- connect-mangodb
+0             |                                     |                       |             |-- connect-memcached
+0             |                                     |                       |
++---------+   |       +------------------+          |                       +--- cookieSession
+| connect |---+-------| Request/Response |----------+
++---------+   |       +------------------+          | 
+1             |                                     |
+1             |                                     |
+1             |                                     |
+1             |                                     |
+1             |                                     |                   +------ csrf
+1             |                                     |                   |------ basicAuth
+1             |                                     +---- Security -----+------ connect-auth
+1             |                                                         |------ helmet
+1             |                                                         
+1             |                                                         
+1             |                                                         
+1             |                                                         
+1             |                                                         
+1             |                                                         
+1             |                                       +----------- errorHandler
+1             |                                       |
+1             |                                       |----------- compression
+1             |                                       |
+1             |                                       |
+1             |                                       |                 
+1             |                                       |----------- logger                
+1             |       +------------------+            |
+1             +-------| Post-Response    |------------+----------- responseTime
+1                     +------------------+            |
+1                                                     |
+1                                                     |          
+1                                                     |                       |------ connect-header
+1                                                     +----------- Header ----+
+1                                                                             |------ connect-server
+```
