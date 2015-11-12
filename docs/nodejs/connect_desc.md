@@ -216,3 +216,9 @@ MVC目录
 1                                                     +----------- Header ----+
 1                                                                             |------ connect-server
 ```
+
+
+
+参考连接
+=====================
+1. [NodeJS基础中间件Connect](http://blog.fens.me/nodejs-connect/)
