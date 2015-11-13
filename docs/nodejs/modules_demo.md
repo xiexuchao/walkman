@@ -12,4 +12,6 @@ NodeJS常用模块介绍
 
 参考文章
 =======
-[NodeJS framework...](https://www.quora.com/Which-Node-js-framework-is-better-for-building-a-RESTful-api)
+1. [NodeJS framework...](https://www.quora.com/Which-Node-js-framework-is-better-for-building-a-RESTful-api)
+2. [NodeJS15个应用场景](http://www.devstore.cn/essay/essayInfo/2199.html)
+
