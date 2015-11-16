@@ -29,3 +29,7 @@ NodeJS
 RESTful API相关
 ============
 [RESTful API设计指南](https://github.com/walkerqiao/walkman/blob/master/docs/restful_api.md)
+
+Web开发
+========
+[HTTP Long Poll](https://github.com/walkerqiao/walkman/blob/master/docs/nodejs/http_long_poll.md)
