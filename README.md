@@ -32,4 +32,4 @@ RESTful API相关
 
 Web开发
 ========
-[HTTP Long Poll](https://github.com/walkerqiao/walkman/blob/master/docs/nodejs/http_long_poll.md)
+[HTTP Long Poll](https://github.com/walkerqiao/walkman/blob/master/docs/lamp/http_long_poll.md)
