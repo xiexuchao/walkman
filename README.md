@@ -34,3 +34,4 @@ Web开发
 ========
 1. [HTTP Long Poll](https://github.com/walkerqiao/walkman/blob/master/docs/lamp/http_long_poll.md)
 2. [使用Node.js+Socket.IO搭建WebSocket实时应用](http://www.plhwin.com/2014/05/28/nodejs-socketio/)
+3. [编写WebSocket服务器](https://github.com/walkerqiao/walkman/blob/master/docs/lamp/websocket_server_programming.md)
