@@ -8,6 +8,15 @@
   我们假设服务器运行在example.com上， 端口号8000， 而且能够响应/chart上的get请求。
   
 ### 客户端握手请求
+  不管怎么设计，WebSocket握手请求都是由客户端发起， 因此必须知道如何解读客户端信息。 首先客户端会发送类似这样的连接请求(HTTP版本号最低为1.1, 而且请求方法必须为GET).
+```
+GET /chart HTTP/1.1
+Host: example.com:8000
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+Sec-WebSocket-Version: 13
+```
 
   
 参考文献
