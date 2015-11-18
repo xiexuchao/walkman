@@ -107,5 +107,5 @@
   
 ## 4.7 IPv4首部
   通过IP进行通信时，需要再数据的前面加入IP首部信息。IP首部中包含这用于IP协议进行发包控制时所有的必要信息。了解IP首部的结构，也就能够对IP所提供的功能有一个详细的把握。
-![IP Header]()
+![IP Header](https://github.com/walkerqiao/walkman/blob/master/images/ip_header.png)
   
