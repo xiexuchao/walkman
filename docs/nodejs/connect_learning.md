@@ -136,11 +136,11 @@ proto.handle = function handle(req, res, out) {
       removed = '';
     }
 
-    // next callback
+    // next callback 取出栈中下一个处理函数
     var layer = stack[index++];
 
     // all done
-    if (!layer) {
+    if (!layer) { // 已经到栈底，交给默认的处理方法defer来处理
       defer(done, err);
       return;
     }
@@ -150,7 +150,7 @@ proto.handle = function handle(req, res, out) {
     var route = layer.route;
 
     // skip this layer if the route doesn't match
-    if (path.toLowerCase().substr(0, route.length) !== route.toLowerCase()) {
+    if (path.toLowerCase().substr(0, route.length) !== route.toLowerCase()) { // 不匹配pattern直接跳过该处理函数
       return next(err);
     }
 
@@ -171,10 +171,113 @@ proto.handle = function handle(req, res, out) {
       }
     }
 
-    // call the layer handle
+    // call the layer handle 调用具体的处理函数
     call(layer.handle, route, err, req, res, next);
   }
 
   next();
 };
 ```
+  上面代码中layer就是栈中保存的每一个处理函数的对象信息，结构为{route: route, handle: fn}. 
+```
+function call(handle, route, err, req, res, next) {
+  var arity = handle.length;
+  var error = err;
+  var hasError = Boolean(err);
+
+  debug('%s %s : %s', handle.name || '<anonymous>', route, req.originalUrl);
+
+  try {
+    if (hasError && arity === 4) {
+      // error-handling middleware
+      handle(err, req, res, next);
+      return;
+    } else if (!hasError && arity < 4) {
+      // request-handling middleware
+      handle(req, res, next);
+      return;
+    }
+  } catch (e) {
+    // replace the error
+    error = e;
+  }
+
+  // continue
+  next(error);
+}
+```
+  从call方法知道调用具体的handle的时候，会做一些判断。
+  * 判断是否传入err, 即上一个中间件是否传入错误，如果传入错误，当前的处理函数又接受四个参数，那么就使用该处理函数进行异常处理。进行异常流处理。
+  * 如果上一个中间件没有错误，而且当前处理函数接受参数小于4，那么接着正常流执行。
+  * 如果上一个中间件有错误，但当前还不是异常处理函数，即接受参数不为4， 那么将异常推后到下一个中间件中。
+  * 而处理到中间件末尾，交由默认的defer来处理。
+
+```
+    if (!layer) {
+      defer(done, err);
+      return;
+    }
+    
+var defer = typeof setImmediate === 'function'
+  ? setImmediate
+  : function(fn){ process.nextTick(fn.bind.apply(fn, arguments)) }
+  
+  var done = out || finalhandler(req, res, {
+    env: env,
+    onerror: logerror
+  });
+```
+
+  最后交由finalhandler模块来处理， 猜测应该是处理error等异常流的情况， 暂时不深入到finalhandler模块研究，后续在深入进去看看。
+  
+## 总结
+  到现在为止，对connect的流程及基本作用基本了解， 在具体项目中实施起来也有谱了。
+  
+  正常流处理都需要接受2~3个参数作为处理函数的参数， 而异常处理函数需要接受4个参数， 第一个参数即上一个中间件给出的err信息，即next传入的错误信息。
+  
+## 应用举例
+
+### 什么也不做的中间件
+```
+  function uselessMiddleware(req, res, next){
+    next();
+  }
+  
+  app.use(uselessMiddleware);
+```
+
+### 异常处理中间件
+```
+  function errorHandleMiddleware(err, req, res, next){
+    if(err) {
+      // handle error
+    }
+    
+    // 是否需要继续正常流呢?? 需要就next()
+  }
+  app.use(errorHandleMiddleware);
+```
+
+### 抛出异常的中间件
+```
+  function throwErrorMiddleware(req, res, next) {
+    // do something useful
+    next("here is some error msg");
+  }
+  
+  app.use(throwErrorMiddleware);
+```
+
+
+### 代码集中到一起如下
+```
+  app.use(uselessMiddleware);
+  app.use(throwErrorMiddleware); // 抛出异常
+  app.use(errorHandleMiddleware); // 处理上一部中的异常
+  ....
+```
+
+
+## 参考链接
+  * [connect源码分析--基础架构](https://cnodejs.org/topic/4fb79b0e06f43b56112b292c)
+  * [A short guide to Connect Middleware](http://stephensugden.com/middleware_guide/)
