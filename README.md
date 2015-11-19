@@ -8,7 +8,7 @@ NodeJS
 
 RESTful API相关
 ============
-[RESTful API设计指南](https://github.com/walkerqiao/walkman/blob/master/docs/restful_api.md)
+1. [RESTful API设计指南](https://github.com/walkerqiao/walkman/blob/master/docs/restful_api.md)
 
 Web开发
 ========
@@ -30,11 +30,11 @@ AngularJS源码分析
 
 正则表达式
 ======================
-[恶补正则表达式](https://github.com/walkerqiao/walkman/blob/master/docs/angular/regexp.md)
+1. [恶补正则表达式](https://github.com/walkerqiao/walkman/blob/master/docs/angular/regexp.md)
 
 
 PS常用效果实现
 ==============
-[Photoshop常用效果实现](https://github.com/walkerqiao/walkman/blob/master/docs/photoshop_common.md)
+1. [Photoshop常用效果实现](https://github.com/walkerqiao/walkman/blob/master/docs/photoshop_common.md)
 
 
