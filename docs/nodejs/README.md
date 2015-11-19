@@ -23,13 +23,51 @@
 
 #### exit事件
   当进程将要退出时触发。这是一个在固定时间检查模块状态(如单元测试)的好时机。需要注意的是exit的回调结束后，主事件循环将不再运行，所以计时器也会实效。
+  
+  这个事件发生的时候，就没有办法在这个点上阻止主循环的退出了，一旦所有的exit监听器运行完成进程就退出了。因此这里只能执行一些同步操作。 该事件的回调函数接受一个code参数，进程退出的退出码。
+  
+  这个事件只有在node明确使用process.exit()退出进程或者在主循环耗干的时候隐式触发。
+  
   监听exit事件的例子
 ```
-  process.on('exit', function(){
-  
+  process.on('exit', function(code){
+    // 不要指望这里会帮你做什么
+    setTimeout(function(){
+      console.log('主事件循环已停止，所以不会执行');
+    }, 0);
+    
+    // 这里是最后机会做点事情了
+    console.log('退出前执行');
   });
 ```
 #### message事件
+  通过ChildProccess.send()发送的信息可以在子进程中使用message事件获取。
+  * message: 解析的JSON或基本类型对象
+  * sendHandle: 处理对象，net.Socket或net.Server对象或者undefined.
+```
+// main.js
+var fork = require('child_process').fork;                                              
+var example1 = fork(__dirname + '/example1.js');                                       
+
+example1.on('message', function(response) {                                            
+    console.log(response);                                                             
+});
+
+example1.send({func: 'input'});
+
+// example1.js
+function func(input) {
+    console.log(input);
+    process.send('Hello ' + input);
+}
+
+process.on('message', function(m) {
+    func(m);
+});
+
+// node main.js ==> Hello [object Object]
+```
+
 #### rejectionHandled事件
 #### uncaughtException事件
 #### unhandledRejection事件
