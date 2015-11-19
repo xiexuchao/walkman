@@ -68,6 +68,37 @@ process.on('message', function(m) {
 // node main.js ==> Hello [object Object]
 ```
 
+```
+var cp = require('child_process');
+
+if (!process.send) {
+  var p = cp.fork(__dirname + '/forktest.js');
+  p.send({
+    count: 10
+  });
+  p.on('message', function(data) {
+    process.exit(0);
+  });
+} else {
+  process.on('message', function(data) {
+    console.log(data);
+    data.count--;
+    if (data.count === 0) {
+      process.send({});
+      process.exit(0);
+    }   
+    var p = cp.fork(__dirname + '/forktest.js');
+    p.send(data);
+    p.on('message', function(data) {
+      process.send(data);
+      process.exit(0);
+    }); 
+  }); 
+}
+
+// node forktest.js
+```
+
 #### rejectionHandled事件
 #### uncaughtException事件
 #### unhandledRejection事件
