@@ -5,7 +5,7 @@ NodeJS
 1. [使用 Node.js 开发基于 JavaScript 的 RESTful 应用](https://www.ibm.com/developerworks/cn/web/1211_zuochao_nodejsrest/)
 2. [NodeJS模块介绍](https://github.com/walkerqiao/walkman/blob/master/docs/nodejs/modules_demo.md)
 3. [Connect源码及使用分析](https://github.com/walkerqiao/walkman/blob/master/docs/nodejs/connect_learning.md)
-4. [NodeJS API](https://github.com/walkerqiao/walkman/blob/master/docs/nodejs/api.md)
+4. [NodeJS API](https://github.com/walkerqiao/walkman/blob/master/docs/nodejs/README.md)
 
 RESTful API相关
 ============
