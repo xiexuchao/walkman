@@ -214,3 +214,10 @@ _        V                                         V
     return 0;
   }
 ```
+  上面的代码gcc process_fork.c -o process_fork, 运行./process_fork， 运行结果如下:
+```
+before calling fork, calling process pid = 23721
+this is parent process and pid = 23721, child's pid = 23722
+this is child process and child's pid = 23722, parent's pid = 1
+```
+  
