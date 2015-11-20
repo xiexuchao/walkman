@@ -208,6 +208,7 @@ _        V                                         V
     }
     
     if(pid > 0) {
+      //sleep(1);
       printf("this is parent process and pid = %d, child's pid = %d\n", getpid(), pid);
     }
     
@@ -220,4 +221,106 @@ before calling fork, calling process pid = 23721
 this is parent process and pid = 23721, child's pid = 23722
 this is child process and child's pid = 23722, parent's pid = 1
 ```
+  当没有给父进程加sleep时，由于父进程先执行完，子进程成了孤儿进程，系统将其托孤给了1(init)进程，所以ppid = 1.
+
+  当加上sleep(1);时，子进程先执行完:
+```
+before calling fork, calling process pid = 23733
+this is child process and child's pid = 23734, parent's pid = 23733
+this is parent process and pid = 23733, child's pid = 23734
+```
+  这次可以正确看到想要的结果。
   
+### 孤儿进程、僵尸进程
+  fork系统调用之后，父子进程将交替执行，执行顺序不定。
+  如果父进程先退出，子进程还没想退出那么子进程的父进程将变为init进程(托孤给了init进程)。(任何一个进程都必须有父进程)
+  
+  如果子进程先退出，父进程还没有退出，那么子进程必须等到父进程捕获到了子进程的退出状态才真正结束，否则这个时候子进程就成为僵尸进程(僵尸进程:只保留一些退出信息公父进程查询)
+  
+  示例:
+```
+  #include <stdio.h>
+  #include <unistd.h>
+  #include <stdlib.h>
+  
+  #define ERR_EXIT(m) \
+    do \
+    {\
+      perror(m);\
+      exit(EXIT_FAILURE);\
+    }\
+    while (0)\
+    
+  int main(void)
+  {
+    pid_t pid;
+    printf("before calling fork, calling process pid = %d\n", getpid());
+    
+    pid = fork();
+    if(pid == -1)
+      ERR_EXIT("fork error");
+      
+    if(pid == 0) {
+      printf("this is child process and child's pid = %d, parent's pid = %d\n", getpid(), getppid());
+    }
+    
+    if(pid > 0) {
+      sleep(100);
+      printf("this is parent process and pid = %d, child's pid = %d\n", getpid(), pid);
+    }
+    
+    return 0;
+  }
+```
+  从上可看到，子进程先退出，但进程列表中国年还可以查看到子进程(ps -ef | grep process_fork), 僵尸进程，如果系统中存在过多的僵尸进程，将会使得新的进程不能产生。
+  
+### 写时复制
+  linux系统为了提高系统性能和资源利用率，在fork出一个新进程时，系统并没有真正复制一个副本。
+  如果多个进程要读取它们自己那部分资源的副本，那么复制是不必要的。
+  每个进程只要保存一个指向这个资源的指针就可以了。
+  如果一个进程要修改自己的那部分资源的副本，那么就会复制那份资源。这就是写时复制的含义。
+  
+  fork和vfork
+  在fork还没有实现copy on write之前，Unix设计者很关心fork之后立即执行exec所造成的地址空间浪费，所以引入了vfork系统调用。
+  vfork有个限制，子进程必须立刻执行_exit()或exec函数。
+  即使fork实现了copy on write, 效率也没有vfork高，但是我们不推荐使用vfork，因为几乎每一个vfork的实现，都或多或少存在一定的问题。
+  
+```
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <fcntl.h>
+
+#define ERR_EXIT(m) \
+    do\
+    {\
+        perror(m);\
+        exit(EXIT_FAILURE);\
+    }\
+    while (0)\
+
+int main(void)
+{
+    pid_t pid;
+    int fd; 
+    fd = open("test.txt", O_WRONLY);
+
+    if(fd == -1) 
+        ERR_EXIT("Open Error");
+
+    pid = fork();
+    if(pid == -1) 
+        ERR_EXIT("fork error");
+
+    if(pid == 0) {
+        write(fd, "child", 5); 
+    }   
+
+    if(pid > 0) {
+        //sleep(1);
+        write(fd, "parent", 6); 
+    }   
+
+    return 0;
+}
+```
