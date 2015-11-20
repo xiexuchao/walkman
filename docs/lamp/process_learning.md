@@ -846,8 +846,153 @@ entering main process---
   fcntl(1, F_SETFD, FD_CLOEXEC); 将标准输出关闭， 调用execlp("ls", "ls", "-ls", NULL); 无法再将结果输出到标准输出了。
   
   
+## 父进程查询子进程的退出, wait, waitpid
+### 僵尸进程
+  当一个子进程先于父进程结束运行时，它与父进程之间的关联还会保持到父进程也正常地结束运行，或者父进程调用了wait才告终。
+  子进程退出时，内核将子进程置为僵尸状态，这个进程称为僵尸进程，它只保留最小地一些内核数据结构，一边父进程查询子进程地退出状态。
+  
+  进程表中代表子进程地数据项不会立刻释放的，虽然不再活跃了， 可子进程还停留再系统里， 因为它的退出码还需要保存起来以备父进程中后续的wait调用使用。 他将称为一个僵进程。
+  
+### 如何避免僵尸进程
+  调用wait或者waitpid函数查询子进程退出状态， 此方法父进程会被挂起。
+  
+  如果不想让父进程挂起，可以再父进程中加入一条语句: signal(SIGCHLD, SIG_IGN);表示父进程忽略SIGCHLD信号，该信号是子进程退出的时候项父进程发送的。
+  
+### SIGCHLD信号
+  当子进程退出的时候， 内核会向父进程发送SIGCHLD信号，子进程的退出是个异步事件(子进程可以再父进程运行的任何时刻终止)。
+  如果不想让子进程变成僵尸进程可再父进程中加入:signal(SIGCHLD, SIG_IGN);
+  如果将此信号的处理方式设为忽略，可以让内核把僵尸子进程交给init进程去处理，省去了大量僵尸进程占用系统资源。
+  
+```
+#include <stdio.h>
+#include <unistd.h>
+#include <signal.h>
+#include <stdlib.h>
+
+int main(void)
+{
+    pid_t pid;
+
+    if(signal(SIGCHLD, SIG_IGN) == SIG_ERR)
+    {   
+        perror("signal error");
+        exit(EXIT_FAILURE);
+    }   
+
+    pid = fork();
+    if(pid == -1) 
+    {   
+        perror("fork error");
+        exit(EXIT_FAILURE);
+    }   
+
+    if(pid == 0) {
+        printf("this is child process\n");
+        exit(0);
+    }   
 
 
+    if(pid > 0) {
+        sleep(10);
+        printf("this is parent process\n");
+    }   
 
+    return 0;
+}
+```
+  编译并运行， 可看到， 子进程退出了， 但查看进程， 看不到退出子进程为僵尸进程。
+  
+### wait()函数
+  #include <sys/types.h>
+  #include <sys/wait.h>
+  
+  pid_t wait(int *status);
+  
+  进程一旦调用了wait, 就立即阻塞自己，由于wait自动分析是否当前进程的某个子进程已经退出，如果让它找到了这样的一个已经变成僵尸的子进程，wait就会收集这个子进程的信息，并把它彻底销毁后返回；如果没有找到这样的一个子进程，wait会一直阻塞在这里，知道有一个出现为止。
+  
+  参数status用来保存被收集进程退出时的一些状态，它是一个指向int类型的指针。如果我们对这个子进程时如何死掉的毫不在意，指向把这个僵尸进程消灭掉，(事实上，绝大多数情况下，我们都会这样想)，我们就可以设定这个参数为NULL,就想下面这样。
+  pid = wait(NULL);
+  
+  如果成功，wait会返回被收集的子进程的进程ID,如果调用进程没有子进程，调用就会失败，此时wait返回-1, 同时errno被设置为ECHILD。
+  
+  wait系统调用会使得父进程暂停执行，直到它的一个子进程结束为止。 返回的时子进程的PID,它通常时结束的子进程。
+  状态信息允许父进程判定子进程的退出状态，即从子进程的main函数返回的值或子进程中exit语句的退出码。如果status不是一个空指针，状态信息将被写入它指向的位置。
+  
+  可以上述的一些宏判断子进程的退出情况的宏:
+  * WIFEXITED(status): 如果子进程正常结束，该宏返回一个非零值
+  * WEXITSTATUS(status): 如果WIFEXITED非零，该宏返回子进程退出码
+  * WIFSIGNALED(status): 如果子进程因为捕获信号而终止，返回非零值
+  * WTERMSIG(status): 如果WIFSIGNALED非零，返回信号代码
+  * WIFSTOPPED(status): 如果子进程被暂停，返回一个非零值
+  * WSTOPSIG(status): 如果WIFSTOPPED非零，返回一个信号代码
+
+```
+#include <stdio.h>
+#include <sys/wait.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+int main(void)
+{
+    pid_t pid;
+    pid = fork();
+    if(pid < 0) {
+        perror("fork error");
+        exit(EXIT_FAILURE);
+    }   
+
+    if(pid == 0) {
+        printf("this is child process\n");
+        exit(100);
+    }   
+
+    int status;
+    pid_t ret;
+    ret = wait(&status);
+
+    if(ret < 0) {
+        perror("wait error");
+        exit(EXIT_FAILURE);
+    }   
+
+    printf("ret = %d pid = %d\n", ret, pid);
+
+    if(WIFEXITED(status))
+        printf("child exited normal exit status = %d\n", WEXITSTATUS(status));
+
+    else if(WIFSIGNALED(status))
+        printf("child exited abnormal signal number = %d\n", WTERMSIG(status));
+
+    else if(WIFSTOPPED(status))
+        printf("child stopped signal number = %d\n", WSTOPSIG(status));
+
+    return 0;
+}
+```
+
+  编译并运行，结果如下:
+```
+bogon:process apple$ ./wait1 
+this is child process
+ret = 24830 pid = 24830
+child exited normal exit status = 100
+```
+  子进程正常退出， WIFEXITED(status)返回值大于0， 通过WEXITSTATUS(status)可以获取子进程退出码.
+  然后将子进程的exit(100),替换为abort(), 那么执行结果如下:
+```
+bogon:process apple$ ./wait1 
+this is child process
+ret = 24849 pid = 24849
+child exited abnormal signal number = 6
+```
+  子进程异常退出，WIFSIGNALED(status)为真， 可用WTERMSIG(status)获取信号码。
+  
+  
+### waitpid()函数
+  #include<sys/types.h>
+  #include<sys/wait.h>
+  
+  pid_t waitpid(pid_t pid, int * status, int options);
+  
 # 参考链接
   * [linux系统编程之进程](http://www.cnblogs.com/mickole/p/3187409.html)
