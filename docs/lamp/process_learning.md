@@ -600,3 +600,5 @@ fun2 is called
 ```
   fun1没有被执行，因为fun2中kill了。
   
+# 参考链接
+  * [linux系统编程之进程](http://www.cnblogs.com/mickole/p/3187409.html)
