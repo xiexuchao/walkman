@@ -289,6 +289,58 @@ this is parent process and pid = 23733, child's pid = 23734
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+
+#define ERR_EXIT(m) \
+    do\
+    {\
+        perror(m);\
+        exit(EXIT_FAILURE);\
+    }\
+    while (0)\
+
+int main(void)
+{
+    pid_t pid;
+    int val = 1;
+    printf("before calling fork, val = %d\n", val);
+
+    pid = fork();
+    if(pid == -1) 
+        ERR_EXIT("fork error");
+
+    if(pid == 0) {
+        printf("child process, before change val, val = %d\n", val);
+        val++;
+
+        printf("this is child process and val = %d\n", val);
+
+        _exit(0);
+    }   
+
+    if(pid > 0) {
+        sleep(1);
+
+        printf("this is parent process and val = %d\n", val);
+    }   
+
+    return 0;
+}
+```
+  编译并运行：
+```
+bogon:test apple$ gcc fork1.c -o fork1
+bogon:test apple$ ./fork1 
+before calling fork, val = 1
+child process, before change val, val = 1
+this is child process and val = 2
+this is parent process and val = 1
+```
+  可见父进程和子进程共享资源写时复制copy on write.
+  
+```
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
 #include <fcntl.h>
 
 #define ERR_EXIT(m) \
@@ -324,3 +376,88 @@ int main(void)
     return 0;
 }
 ```
+  编译并运行
+```
+bogon:test apple$ gcc fork2.c -o fork2
+bogon:test apple$ ./fork2
+bogon:test apple$ cat test.txt
+parentchildbogon:test apple$ 
+```
+  fork产生的子进程与父进程相同的文件描述符指向相同的文件表，引用计数器增加，共享文件偏移指针。
+  
+  从运行结果可以得知，父子进程共享文件偏移指针，父进程写完后文件偏移到parent后子进程开始接着写。
+  
+## 进程退出exit, _exit区别及atexit函数
+
+### 一. 进程终止有5种方式:
+  正常退出:
+  * 从main函数返回
+  * 调用exit
+  * 调用_exit
+  
+  异常退出
+  * 调用abort
+  * 由信号终止
+  
+### 二. exit和_exit区别:
+```
++-------------------------------------------+
+|              进程运行                     |
++-------------------------------------------+
+_         |                      |
+_         |                      V
+_         |       +------------------------------+
+_         |       |      调用终止处理程序        |------+
+_         |       +------------------------------+      |
+_         |                      |                      |
+_         |                      |                      |exit
+_         |                      V                      |
+_         _exit         +---------------------+         |
+_         |             |    清除I/O缓冲      |---------+
+_         |             +---------------------+
+_         |                      |
+_         V                      V
++-------------------------------------------+
+|                 内核                      |
++-------------------------------------------+
+_                     |
+_                     |
+_                     |
+_                     V
++-------------------------------------------+
+|             进程终止运行                  |
++-------------------------------------------+
+```
+  关于_exit():
+  #include <unistd.h>
+  void _exit(int status);
+  #include <stdlib.h>
+  void _Exit(int status);
+  
+  #include <stdlib.h>
+  void exit(int status);
+  
+  exit()在stdlib.h中，而_exit()在unistd.h中。
+  注: exit()就是退出，传入的参数时程序退出时的状态码，0表示正常退出，其他表示非正常退出，一般都用-1或1，标准C里边有EXIT_SUCCESS, EXIT_FAILURE两个宏，用exit(EXIT_SUCCESS);
+  
+  _exit()函数的作用最为简单: 直接使进程停止运行，清除其使用的内存空间，并销毁其在内核中的各种数据结构；exit()函数则在这些基础上做了一些包装，在执行退出之前加了若干道工序。
+  exit()函数与_exit()函数最大的区别就在于exit()函数在调用exit系统调用之前要检查文件的打开情况，把文件缓冲区中的内容写回文件，就是清理"I/O缓冲".
+  
+  exit()在结束调用它的进程之前，要进行如下步骤:
+  1. 调用atexit()注册的函数(出口函数), 按atexit注册时相反的顺序调用所有由它注册的函数，这使得我们可以指定在程序终止时执行自己的清理动作，例如，保存程序状态信息于某个文件，解开对共享数据库上的锁等。
+  2. cleanup(): 关闭所有打开的流，这将导致写所有被缓冲的输出，删除用tmpfile函数建立的所有临时文件。
+  3. 最后调用_exit()函数终止进程。
+  
+  _exit()做三件事情(main):
+  1. 所有属于该进程的打开的文件描述符被关闭。
+  2. 所有该进程的子进程都托管给init 1进程
+  3. 给该进程的父进程发送一个SIGCHLD信号。
+  
+  exit执行完清理工作后就调用_exit来终止进程。
+
+### 三. atexit()
+  atexit可以注册终止处理程序，ANSI C规定最多可以注册32个终止处理程序。
+  终止处理程序的调用与注册次序相反
+  #include <stdlib.h>
+  int atexit(void (* function)(void));
+  
