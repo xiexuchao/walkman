@@ -461,3 +461,142 @@ _                     V
   #include <stdlib.h>
   int atexit(void (* function)(void));
   
+```
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+
+void fun1()
+{
+    printf("fun1 is called\n");
+}
+
+void fun2()
+{
+    printf("fun2 is called\n");
+}
+
+int main(void)
+{
+    printf("main function\n");
+    atexit(fun1);
+    atexit(fun2);
+
+    exit(EXIT_SUCCESS);
+}
+```
+  运行结果如下:
+```
+bogon:process apple$ ./atexit 
+main function
+fun2 is called
+fun1 is called
+```
+  
+  当调用fork时，子进程继承父进程注册的atexit:
+```
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+
+#define ERR_EXIT(m) \
+    do\
+    {\
+        perror(m);\
+        exit(EXIT_FAILURE);\
+    }\
+    while (0)\
+
+
+void fun1()
+{
+    printf("fun1 is called\n");
+}
+
+void fun2()
+{
+    printf("fun2 is called\n");
+}
+
+int main(void)
+{
+    pid_t pid;
+    pid = fork();
+    atexit(fun1);
+    atexit(fun2);
+
+    if(pid == -1) 
+        ERR_EXIT("fork error");
+
+    if(pid == 0) {
+        printf("this is child process\n");
+    }   
+
+    if(pid > 0) {
+        printf("this is parent process\n");
+    }   
+
+    return 0;
+}
+```
+  编译并运行，结果如下:
+```
+bogon:process apple$ gcc atexit_fork.c -o atexit_fork
+bogon:process apple$ 
+bogon:process apple$ ./atexit_fork 
+this is parent process
+fun2 is called
+fun1 is called
+this is child process
+fun2 is called
+fun1 is called
+```
+  当atexit注册的函数中有一个没有正常返回或被kill, 则后续的注册函数都不会被执行
+```
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <signal.h>
+
+void fun1()
+{
+    printf("fun1 is called\n");
+}
+
+void fun2()
+{
+    printf("fun2 is called\n");
+    kill(getpid(), SIGINT);
+}
+
+void fun3()
+{
+    printf("fun3 is called\n");
+}
+
+
+int main(void)
+{
+    printf("main function\n");
+
+    if(signal(SIGINT, SIG_DFL) == SIG_ERR) {
+        perror("signal error");
+        exit(EXIT_FAILURE);
+    }   
+
+    atexit(fun1);
+    atexit(fun2);
+    atexit(fun3);
+
+    exit(EXIT_SUCCESS);
+}
+```
+  编译并运行，结果如下:
+```
+bogon:process apple$ ./atexit_kill 
+main function
+fun3 is called
+fun2 is called
+```
+  fun1没有被执行，因为fun2中kill了。
+  
