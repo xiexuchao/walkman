@@ -600,5 +600,254 @@ fun2 is called
 ```
   fun1没有被执行，因为fun2中kill了。
   
+## exec系列函数(execl, execlp, execle, execv, execvp)使用
+### 一. exec替换进程映像
+  在进程的创建上Unix采用了一个独特的方法，它将进程创建与加载一个新进程映像分离。这样的好处是有更多的余地对两种操作进行管理。
+  
+  当我们创建了一个进程之后，通常将子进程替换成新的进程映像，这样可以用exec系列函数来进行。当然，exec系列的函数也可以将当前进程替换掉。
+  
+  例如，在shell命令执行ps命令，实际上是shell进程调用fork复制一个新的子进程，再利用exec系统调用将新产生的子进程完全替换成ps进程。
+  
+### 二. exec系列函数(execl, execlp, execle, execv execvp)
+  包含头文件<unistd.h>
+  功能：
+  用exec函数可以把当前进程替换为一个新进程，且新进程与原进程有相同的PID. exec名下是由多个关联函数组成的一个完整系列。
+  头文件<unistd.h>
+  extern char **environ;
+  原型:
+  int execl(const char *path, const char *arg, ...);
+  int execlp(const char *file, const char *arg, ...);
+  int execle(const char *path, const char *arg, ..., char * const envp[]);
+  int execv(const char *path, char *const argv[]);
+  int execvp(const char *file, char *const argv[]);
+  
+  参数:
+  * path: 表示你要启动程序的名称包括路径名
+  * arg: 表示启动程序所带的参数，一般第一个参数为要执行命令名，不是带路径且arg必须以NULL结束。
+  
+  返回值: 成功返回0，失败返回-1
+  注: 上述exec系列函数底层都是通过execve系统调用实现:
+  #include <unistd.h>
+  int execve(const char *filename, char *const argv[], char *const envp[]);
+  描述: execve执行由filename指定的程序。 filename必须为二进制可执行程序或以这种格式开头的脚本。
+
+  以上exec系列函数的区别:
+  1. 带l的exec函数: execl, execlp, execle，表示后面的参数以可变参数的形式给出，且都以一个空指针结束。
+  2. 带p的exec函数: execlp, execvp,表示第一个参数path不用输入完整路径，只要给出命令名即可，它会在环境变量PATH中查找命令。
+  3. 不带l的exec函数: execv, execvp表示命令所需的参数以char *arg[]的形式给出，且arg最后一个元素必须为NULL.
+  4. 带e的exec函数: execle表示，将环境变量传递给需要替换的进程
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+int main(void)
+{
+    printf("entering main process---\n");
+    execl("/bin/ls", "ls", "-la", NULL);
+
+    printf("exiting main process ----\n");
+    return 0;
+}
+```
+  编译并运行，结果如下:
+```
+bogon:process apple$ ./exec_test 
+entering main process---
+total 128
+drwxr-xr-x  10 apple  staff   340 11 20 16:08 .
+drwxr-xr-x   5 apple  staff   170 11 20 15:28 ..
+-rwxr-xr-x   1 apple  staff  8584 11 20 15:31 atexit
+-rw-r--r--   1 apple  staff   269 11 20 15:31 atexit.c
+-rwxr-xr-x   1 apple  staff  8680 11 20 15:36 atexit_fork
+-rw-r--r--   1 apple  staff   560 11 20 15:36 atexit_fork.c
+-rwxr-xr-x   1 apple  staff  8800 11 20 15:43 atexit_kill
+-rw-r--r--   1 apple  staff   498 11 20 15:43 atexit_kill.c
+-rwxr-xr-x   1 apple  staff  8480 11 20 16:08 exec_test
+-rw-r--r--   1 apple  staff   220 11 20 16:07 exec_test.c
+```
+  可见，利用execl将当前进程main替换掉，所有最后的那条打印语句不会输出。
+  
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+int main(void)
+{
+    printf("entering main process---\n");
+    execlp("ls", "ls", "-la", NULL);
+
+    printf("exiting main process ----\n");
+    return 0;
+}
+```
+  编译并执行， 结果和上个例子一样。区别在于execlp无需输入可执行程序的完整路径，execlp会自动在PATH中查找给定的命令名，并执行。
+  
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+int main(void)
+{
+    printf("entering main process---\n");
+    int ret;
+    char *argv[] = {"ls", "-la", NULL};
+    execvp("ls", argv);
+
+    if(ret == -1) {
+        perror("execl error");
+    }   
+
+    printf("exiting main process ----\n");
+}
+```
+
+  *e测试
+  
+```
+//hello.c
+#include <unistd.h>
+#include <stdio.h>
+
+extern char** environ;
+
+int main(void)
+{
+    printf("hello pid=%d\n", getpid());
+
+    int i;
+    for(i = 0; environ[i] != NULL; ++i)
+    {   
+        printf("%s\n", environ[i]);
+    }   
+
+    return 0;
+}
+```
+
+  先使用execl调用hello,打印环境变量， 默认的环境变量被打印出来。
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+int main(void)
+{
+    printf("entering main process---\n");
+    int ret;
+    ret = execl("./hello", "hello", NULL);
+
+    if(ret == -1) 
+        perror("execl error");
+
+    printf("exiting main process ----\n");
+}
+```
+  编译并执行， 结果如下:
+```
+bogon:process apple$ ./exec_test3
+entering main process---
+hello pid=24479
+PATH=/opt/local/bin:/opt/local/sbin:/opt/local/bin:/opt/local/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+PWD=/Users/apple/development/clang/process
+LANG=zh_CN.UTF-8
+XPC_FLAGS=0x0
+XPC_SERVICE_NAME=0
+HOME=/Users/apple
+SHLVL=1
+LOGNAME=apple
+_=./exec_test3
+OLDPWD=/Users/apple/development/clang
+```
+
+  然后使用execle函数自己给的需要传递的环境变量信息。
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+int main(void)
+{
+    char *const envp[] = {"AA=11", "BB=22", NULL};
+    printf("entering main process---\n");
+    int ret;
+    ret = execle("./hello", "hello", NULL, envp);
+
+    if(ret == -1) 
+        perror("execl error");
+
+    printf("exiting main process ----\n");
+    return 0;
+}
+```
+  然后编译运行，结果如下:
+```
+bogon:process apple$ ./execle
+entering main process---
+hello pid=24516
+AA=11
+BB=22
+```
+  这个时候hello打印的仅仅是execle传入的环境变量，而非系统默认的环境变量了。
+  
+  
+  总结: 
+  * exec*带l: 表示命令参数以可变参数的形式传递给待调用命令，最后一个可变参数为NULL。 execl, execle, execlp
+  * exec*带p: 可以不用提供待执行命令的完整路径，由系统PATH变量自动查找. execlp, execvp
+  * exec*带e: 表示传入需要使用的环境变量，而非使用系统默认环境变量. execle
+  * exec*不带l: 表示传递给命令的参数以数组形式传入，数组最后一个元素为NULL. execv, execvp
+  
+### 三. fcntl()函数中的FD_CLOEXEC标识在exec系列函数中的作用
+  #include <unistd.h>
+  #include <fcntl.h>
+
+  int fcntl(int fd, int cmd, ... /* arg */);
+  文件描述符标志
+  随后的命令操作文件描述符相关的标志。 当前， 只定义了一个类似的标志:
+  FD_CLOEXEC: close-on-exec标志。如果FD_CLOEXEC位是0，文件描述符在execve(2)的整个过程依然保持打开，否则关闭。
+  
+  F_GETFD(void): 读取文件描述符标志， arg被忽略
+  F_SETFD(long): 设置文件描述符标志到由arg指定的值上
+  
+  如: fcntl(fd, FSETFD, FD_CLOEXEC);
+  
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+
+int main(void)
+{
+    printf("entering main process---\n");
+    int ret = fcntl(1, F_SETFD, FD_CLOEXEC);
+    if(ret == -1) {
+        perror("fcntl error");
+    }   
+
+    int val;
+    val = execlp("ls", "ls", "-la", NULL);
+
+    if(val == -1) {
+        perror("execl error");
+    }   
+
+    printf("exiting main process ----\n");
+    return 0;
+}
+```
+  编译并执行，结果如下:
+```
+bogon:process apple$ ./fcntl 
+entering main process---
+```
+  fcntl(1, F_SETFD, FD_CLOEXEC); 将标准输出关闭， 调用execlp("ls", "ls", "-ls", NULL); 无法再将结果输出到标准输出了。
+  
+  
+
+
+
 # 参考链接
   * [linux系统编程之进程](http://www.cnblogs.com/mickole/p/3187409.html)
