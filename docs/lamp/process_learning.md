@@ -989,10 +989,79 @@ child exited abnormal signal number = 6
   
   
 ### waitpid()函数
+```
   #include<sys/types.h>
   #include<sys/wait.h>
   
   pid_t waitpid(pid_t pid, int * status, int options);
+```
+  参数:
+  * status: 如果不为空，会把状态信息写到它指定的位置，与wait一样。
+  * options: 允许改变waitpid的行为，最有用的一个选项是WNOHANG,它的作用是防止waitpid把调用者的执行挂起。
+  * pid: 与其具体的值有关
+  <ul>
+    <li>pid == -1: 等待任一子进程。于是在这一功能方面waitpid与wait等效</li>
+    <li>pid > 0: 等待其进程ID与pid相等的子进程</li>
+    <li>pid == 0: 等待其组ID等于带哦用进程的组ID的任一子进程。换句话说就是与调用者进程同在一个组的进程。</li>
+    <li>pid < -1: 等待组ID等于pid绝对值的任一子进程。</li>
+  </ul>
+
+  wait()与waitpid()的区别:
+  在一个子进程终止前，wait使其调用者阻塞，而waitpid有一个选择项，可使调用者不阻塞。waitpid并不等待第一个终止的子进程-- 它有若干个选择项，可以控制它锁等待的特定进程。实际上wait函数是waitpid函数的一个特例: waitpid(-1, &status, 0);
+  
+```
+#include <stdio.h>
+#include <sys/wait.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+int main(void)
+{
+    pid_t pid;
+    pid = fork();
+    if(pid < 0) {
+        perror("fork error");
+        exit(EXIT_FAILURE);
+    }   
+
+    if(pid == 0) {
+        printf("this is child process\n");
+        sleep(5);
+        exit(100);
+    }   
+
+    int status;
+    pid_t ret;
+    ret = waitpid(pid, &status, WNOHANG);
+
+    if(ret < 0) {
+        perror("wait error");
+        exit(EXIT_FAILURE);
+    }   
+
+    printf("ret = %d pid = %d\n", ret, pid);
+
+    if(WIFEXITED(status))
+        printf("child exited normal exit status = %d\n", WEXITSTATUS(status));
+
+    else if(WIFSIGNALED(status))
+        printf("child exited abnormal signal number = %d\n", WTERMSIG(status));
+
+    else if(WIFSTOPPED(status))
+        printf("child stopped signal number = %d\n", WSTOPSIG(status));
+
+    return 0;
+}
+```
+
+  编译并运行， 返回结果如下:
+```
+.bogon:process apple$ ./wait1 
+ret = 0 pid = 24927
+child stopped signal number = 127
+this is child process
+```
+
   
 # 参考链接
   * [linux系统编程之进程](http://www.cnblogs.com/mickole/p/3187409.html)
