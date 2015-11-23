@@ -1062,6 +1062,179 @@ child stopped signal number = 127
 this is child process
 ```
 
+## system()函数使用
+
+### 一.system()理解
+  功能: system()调用/bin/sh -c command执行特定命令，阻塞当前进程直到command命令执行完毕。
+  原型: int system(const char *command)
+  返回值: 如果无法启动shell运行命令，system将返回127;出现不能执行system调用的其他错误时返回-1.如果system能够顺利执行，返回那个命令的退出码。
   
+### 二.system()函数原理
+  system函数执行时，会调用fork, execve, waitpid等函数。
+  linux版本的system源码如下:
+```
+int system(const char * cmdstring)
+{
+    pid_t pid;
+    int status;
+
+    if(cmdstring == NULL) {
+        return (1);
+    }   
+
+    if((pid = fork() < 0)) {
+        status = -1; 
+    }   
+    else if(pid == 0) {
+        execl("/bin/sh", "sh", "-c", cmdstring, (char *) 0); 
+        _exit(127); // 子进程正常执行不会执行此语句
+    }   
+    else {
+        while(waitpid(pid, &status, 0) < 0) {
+            if(errno != EINTER) {
+                status = -1; 
+                break;
+            }   
+        }   
+    }   
+
+    return status;
+}
+```
+  函数说明：
+  system()会调用fork()产生子进程，由子进程来调用/bin/sh -c cmdstring来执行cmdstring字符串所代表的命令，此命令执行完后随即返回原调用的进程。
+  
+  在调用system()期间SIGCHLD信号会被暂时搁置，SIGINT和SIGQUIT信号则会被忽略。
+  
+  返回值:
+  =-1: 出现错误
+  =0: 调用成功但是没有出现子进程
+  >0: 成功退出子进程的id
+  
+  如果system()在调用/bin/sh时失败则返回127，其他失败原因返回-1。若参数cmdstring为空指针(NULL)，则返回非零值。
+  如果system()调用成功则最后会返回附加说明。
+  
+  在编写具有SUID/SGID权限的程序时请勿使用system(), system()会继承环境变量，通过环境变量可能会造成系统安全的问题。
+  
+  system函数对返回值的处理，涉及3个阶段:
+  
+  1. 创建子进程等准备工作。如果失败，返回-1.
+  2. 调用/bin/sh拉起shell脚本，如果拉起失败或shell未正常执行结束，原因值被写入到status的低8~15比特位中。system的man中只说明了会写127这个值，但实测还会写126等值。
+  3. 如果shell脚本正常执行结束，将shell返回值填到status的低8~15比特位中。
+
+  备注: 只要能调用到/bin/sh，并且执行shell过程中没有被其他信号异常中断，都算正常结束。
+  比如: 不管shell脚本中返回什么原因值，是0还是非0，都算正常执行结束。 即使shell脚本不存在或没有权限执行，也都算正常执行结束。
+  如果shell脚本执行过程中被强制kill掉等情况则算异常结束。
+  
+  如何判断阶段2中，shell脚本子进程是否正常执行结束呢? 系统提供了WIFEXITED(status)。 如果WIFEXITED(status)为真，则说明正常结束。
+  如何判断阶段3中的shell返回值? 你可以直接通过右移8位来实现，但安全的做法是使用系统提供的宏WEXITSTATUS(status).
+  
+  由于我们一般在shell脚本中会通过返回值判断本脚本是否正常执行，如果成功返回0，失败返回正数。
+  所以综上， 判断一个system()函数调用shell脚本是否正常结束的方法应该是如下3个条件同时成立:
+  1. -1 != status
+  2. WIFEXITED(status)为真
+  3. 0 == WEXITSTATUS(status)
+  
+  注意:
+  根据以上分析，shell脚本不存在、没有权限等场景下时，以上前两个条件依然成立，此时WEXITSTATUS(status)为127，126等值。所以，我们在shell脚本中不能将127,126等值定义为返回值， 否则无法区是shell返回值，还是调用shell脚本异常的原因值。shell脚本中国年的返回值最好从1开始递增。
+
+```
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+
+#define EXIT_ERR(m) \
+do\
+{\
+    perror(m);\
+    exit(EXIT_FAILURE);\
+}\
+while (0);\
+
+int main(void)
+{
+    int status;
+    status = system("ls -l|wc -l");
+
+    if(status == -1) { // 系统错误
+        EXIT_ERR("system error");
+    }   
+    else {
+        if(WIFEXITED(status))
+        {   
+            if(WEXITSTATUS(status) == 0) {
+                printf("run command successful\n");
+            }   
+            else {
+                printf("run command fail and exit code is %d\n", WEXITSTATUS(status));
+            }   
+        } else {
+            printf("exit status = %d\n", WEXITSTATUS(status));
+        }   
+    }   
+
+    return 0;
+}
+```
+  编译并运行，结果如下:
+```
+bogon:process apple$ ./system_test 
+      26
+run command successful
+```
+  结果和直接在命令行执行ls -l | wc -l一样。
+  
+  总结:WIFEXITED, WEXITSTATUS等宏都是从int status中读取相应位获取相应值的。可以通过位偏移获取，当然这几个宏为我们提供了便捷的方式而以。
+  
+## 守护进程详解及创建, deamon()的使用
+### 一. 守护进程概述
+  Linux守护进程是运行在后台的一种特殊进程。它独立于控制终端并且周期性地执行某种任务或等待处理某些发生的事件。它不需要用户输入就能运行而且提供某种服务，不是对整个系统就是对某个用户程序提供服务。 Linux系统的大多数服务器就是通过守护进程实现的。常见的守护进程包括日志进程syslogd、web服务器httpd、邮件服务器sendmail和数据库服务器mysqld等。
+  
+  守护进程一般在系统启动时开始运行，除非强行终止，否则直到系统关机都保持运行。 守护进程进场以超级用户(root)权限运行，因为它们要使用特殊的端口(1-1024)或访问某些特殊的资源。
+  
+  一个守护进程的父进程是init进程，因为它真正的父进程在fork出子进程后就先于子进程exit退出了，所以他是一个由init继承的孤儿进程。守护进程是非交互式程序，没有控制终端，所以任何输出，无论是向标准输出设备stdout还是标准错误设备stderr的输出都需要特殊处理。
+  
+  守护进程的名称通常以d结尾，比如sshd、xinetd、crond等。
+  
+### 二. 创建守护进程步骤
+  首先我们要了解一些基本概念：
+  进程组: 每个进程属于一个进程组。 每个进程组都有一个进程组号，该号等于进程组组长的PID号。一个进程只能为它自己或子进程设置进程组ID号。
+  
+  会话期: 就是一个或多个进程组的集合。
+  setsid()函数可以建立一个对话期:
+  如果，调用setsid()的进程不是一个进程组的组长，此函数会创建一个新的会话期。
+  1. 此进程变成对该会话期的首进程。
+  2. 此进程变成一个新进程组的组长进程。
+  3. 此进程没有控制终端，如果在调用setsid()前，该进程有控制终端，那么与该终端的联系被解除。如果该进程是一个进程组组长，此函数返回错误。
+  4. 为了保证这一点，我们先调用fork然后exit()， 此时只有子进程在运行。
+
+  下面是创建守护进程所需步骤:
+  1. 在父进程中执行fork()并exit()
+  2. 在子进程中调用setsid()函数创建新的会话
+  3. 在子进程中调用chdir()函数，让根目录/成为子进程的工作目录。
+  4. 在子进程中调用umask()函数，设置进程的umask为0.
+  5. 在子进程中国年关闭任何不需要的文件描述符。
+  
+  说明:
+  1. 在后台运行。为避免挂起控制终端将deamon放入后台执行。方法是在进程中调用fork使父进程终止，让deamon在子进程中后台执行。 if(pid = fork()) exit(0); // 是父进程，结束父进程，子进程继续。
+  2. 脱离控制终端，登录会话和进程组。 有必要介绍以下linux中的进程与终端控制、登录会话和进程组之间的关系:
+  <ul>
+    <li>进程属于一个进程组，进程组号GID就是进程组长的进程号PID.</li>
+    <li>登录会话可以包括多个进程组。这些进程组共享一个控制终端。这个控制终端通常是创建进程的登录终端。</li>
+    <li>控制终端，登录会话和进程组通常是从父进程继承下来的。我们的目的就是要摆脱它们，使之不受它们的影响。方法是在第一点的基础上，调用setsid()使进程成为会话组长。</li>
+    <li>setsid(): 当进程是会话组长是setsid()调用失败。但第一点已经保证了进程不是会话组长。setsid()调用成功后，进程成为新的会话组长和新的进程组长，并与原来的登录会话和进程组脱离。由于会话过程对终端的独占性，进程同时与控制终端脱离。</li>
+  </ul>
+  3. 禁止进程重新打开控制终端. 现在进程已经成为无终端的会话组长。但它可以重新申请打开一个控制终端。可以通过使进程不再成为会话组长来禁止重新打开控制终端: if(pid == fork()) exit(0); // 结束第一子进程，第二子进程继续，第二子进程不再是会话组长。
+  4. 关闭打开的文件描述符。进程从创建它的父进程那里继承了打开的文件描述符。如不关闭，将会浪费系统资源，造成进程所在的文件系统无法卸下以及引起无法预料的错误。按如下方法关闭它们: for(i = 0; i) 关闭打开的文件描述符close(i);
+  5. 改变当前工作目录。 进程活动时，其工作目录所在的文件系统不能卸下。一般需要将工作目录改变到根目录。 对于需要转储核心，写运行日志的进程将工作目录改变到特定目录比如/tmp。 chdir("/")
+  6. 重设文件，创建掩码. 进程从创建它的父进程那里继承了文件创建掩码。它可能修改守护进程所创建的文件存取位。为防止这一点，将文件创建掩码清除， umask(0);
+  7. 处理SIGCHLD信号。 处理SIGCHLD信号并不是必须的。 但对于某些进程，特别时服务器进程往往在请求到来时生成子进程处理请求。如果父进程不等待子进程结束，子进程将成为僵尸进程(zombie)从而占用系统资源。 如果父进程等待子进程结束，将增加如进程的负担，影响服务器进程的并发性能。 在linux下可以简单地将SIGCHLD信号地操作设置为SIG_IGN. signal(SIGCHLD, SIG_IGN); 这样，内核在子进程结束时不会产生僵尸进程。这一点与BSD4不同，BSD4下必须显示等待子进程结束才能释放僵尸进程。。
+  
+### 三. 创建守护进程
+  在创建之前，我们先了解下setsid()使用:
+  `#include <unistd.h>`
+  pid_t setsid(void);
+
+
 # 参考链接
   * [linux系统编程之进程](http://www.cnblogs.com/mickole/p/3187409.html)
