@@ -6,7 +6,7 @@
   
 ## 1.2 Unix架构
   严格意义上说，操作系统可以被定义为控制计算机硬件资源的软件，并能为程序运行提供环境。一般而言，我们称这种软件叫做内核(kernel)， 因为它相对比较小、而且位于环境的核心位置。 下图展示了Unix系统架构:
-  ![]()
+  ![Unix架构图](https://github.com/walkerqiao/walkman/blob/master/images/APUE/unix_architecture.png)
 ## 1.3 登录
 ## 1.4 文件和目录
 ## 1.5 输入输出
