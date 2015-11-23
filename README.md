@@ -17,6 +17,7 @@ Web开发
 2. [使用Node.js+Socket.IO搭建WebSocket实时应用](http://www.plhwin.com/2014/05/28/nodejs-socketio/)
 3. [编写WebSocket服务器](https://github.com/walkerqiao/walkman/blob/master/docs/lamp/websocket_server_programming.md)
 4. [进程学习](https://github.com/walkerqiao/walkman/blob/master/docs/lamp/process_learning.md)
+5. [进程学习2](https://github.com/walkerqiao/walkman/blob/master/docs/lamp/process_learning2.md)
 
 TCP/IP
 ========
