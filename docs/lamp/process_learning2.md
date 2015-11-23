@@ -194,3 +194,65 @@ SIGTTOU            22,22,27            D            后台进程企图从控制�
   
   处理信号有三种类型: 进程接收到信号后退出；进程忽略该信号；进程收到信号后执行用户设定用系统调用signal的函数。当进程接收到一个它忽略的信号时，进程丢弃该信号，就像没有收到该信号似的继续运行。 如果进程收到一个要捕获的信号，那么进程从内核态返回用户态时执行用户定义的函数。而且执行用户定义的函数的方法很巧妙，内核是在用户站上创建一个新的层，该层中将返回地址的值设置称用户定义的处理函数的地址，这样进程从内核返回弹出栈顶时就返回到用户定义的函数处，从函数返回再弹出栈顶时，才返回原先进入内核的地方。这样做的原因时用户定义的处理函数不能且不允许再内核态下执行(如果用户定义的函数在内核态下运行的化，用户就可以获得任何权限).
   
+
+# 信号安装、signal、kill、arise
+
+## 信号安装
+  如果进程要处理某一信号，那么就要在进程中安装该信号。安装信号主要用来确定信号值及进程正对该信号值的动作之间的映射关系，即进程将要处理那个信号；该信号被传递给进程时，将执行何种操作。
+  
+  linux主要有两个函数实现信号的安装:signal()、sigaction()。其中signal()只有两个参数，不支持信号传递信息，主要用于前32种非实时信号的安装；而sigaction()是较新的函数(由两个系统调用实现: sys_signal和sys_rt_sigaction), 有三个参数，支持信号传递信息，主要用来与sigqueue()系统调用配合使用，当然，sigaction()同样支持非实时信号的安装。sigaction()优于signal()主要体现在支持信号带有参数。
+  
+## signal()用法
+```
+#include <signal.h>
+typedef void (* __sighandler_t)(int);
+#define SIG_ERR ((__sighandler_t) - 1)
+#define SIG_DFL ((__sighandler_t) 0)
+#define SIG_IGN ((__sighandler_t) 1)
+
+void (* signal(int signum, void (* handler))(int)))(int);
+```
+  如果该函数原型不容易理解的话，可以参考下面的分解方式来理解:
+  typedef void (* sighandler_t)(int);
+  sighandler_t signal(int signum, sighandler_t handler));
+  
+  第一个参数指定信号的值，第二个参数指定针对前面信号值的处理，可以忽略该信号(参数设为SIG_IGN); 可以采用系统默认方式处理信号(参数设置为SIG_DFL);也可以自己实现处理方式(参数指定一个函数地址)。
+  
+  如果signal()调用成功，返回最后一次也就是上一次饿为安装信号signum而调用signal()时的handler的值；失败则返回SIG_ERR;
+  传递给信号处理例程的整数参数是信号值，这样可以使得一个信号处理例程处理多个信号。
+```
+#include <stdio.h>
+#include <unistd.h>
+#include <signal.h>
+#include <stdlib.h>
+
+void sig_handler(int signo);
+
+int main(void)
+{
+    printf("main is waiting for a signal\n");
+
+    if(signal(SIGINT, sig_handler) == SIG_ERR) {
+        perror("signal error");
+        exit(EXIT_FAILURE);
+    }   
+
+    for(;;); // 有时间让我们发送信号
+
+    return 0;
+}
+
+
+void sig_handler(int signo)
+{
+    printf("catch the signal SIGINT %d\n", signo);
+}
+
+bogon:process apple$ ./sigtest 
+main is waiting for a signal
+^Ccatch the signal SIGINT 2
+^Ccatch the signal SIGINT 2
+^Ccatch the signal SIGINT 2
+^\Quit: 3
+```
+  通过kill -l可对照， 2为SIGINT.
