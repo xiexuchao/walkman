@@ -1,4 +1,7 @@
-# walkman's space
+# walkman, walk on, no stop.
+
+## 学习计划
+1. [学习计划](https://github.com/walkerqiao/walkman/blob/master/docs/learning_plan.md)
 
 NodeJS
 =================================
