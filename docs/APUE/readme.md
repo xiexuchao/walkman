@@ -1,6 +1,6 @@
 ### APUE - Advanced Programming in the Unix Environment
 * [前言](https://github.com/walkerqiao/walkman/blob/master/docs/APUE/about_learning.md)
-* [Makefile及C项目编译](ttps://github.com/walkerqiao/walkman/blob/master/docs/APUE/makefile_learning.md) 
+* [Makefile及C项目编译](https://github.com/walkerqiao/walkman/blob/master/docs/APUE/makefile.md) 
 * 第一章 [Unix系统概述](https://github.com/walkerqiao/walkman/blob/master/docs/APUE/chapter_1.md)
 * 第二章 [Unix标准和实现](https://github.com/walkerqiao/walkman/blob/master/docs/APUE/chapter_2.md)
 * 第三章 [文件I/O](https://github.com/walkerqiao/walkman/blob/master/docs/APUE/chapter_3.md)
