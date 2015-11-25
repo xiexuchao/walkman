@@ -100,4 +100,29 @@ gcc count_words.o lexer.o -lfl -o count_words
   
   这种从工作目标到必要条件，从必要条件到工作目标，再从工作目标到必要条件的链接机制就是make分析makefile决定要执行哪些命令的典型做法。
   
+  必要条件的下一个项目会让make想要编译lexer.o. 规则链将make导向lexer.c, 但这次lexer.c并不存在。 make会从lexer.l找到产生lexer.c的规则，所以make会运行flex程序。现在lexer.c存在了，make会接着执行gcc命令。
+  
+  最后,make看到-lfl，其中-l是选项，用来要求gcc必须将其所指定的系统程序库链接进应用程序。此处指定了fl这个参数，代表实际的程序库名未libfl.a。GNU make对这个语法提供了特别的支持: 当-l<name>形式必要条件被发现时，make会搜索libname.so形式的文件；如果找不到相符的文件，make接着会搜索libname.a形式的文件。 在此例中，make会找到/usr/lib/libfl.a，而且会进行最后的动作--链接。
+  
+```
+gcc -l<name> 会查找 libname.so | libname.a
+```
+### 尽量减少重新编译的工作量
+  运行这个程序时，我们发现它除了会输出fee,fie,foe,fum等单词的出现次数，还会输出来自输入文件的其他文本。这并非我们想要的结果。 问题出现在我们忽略了词汇分析器(lexical analyzer)的一些规则，而且flex会将未被认出的文本送往输出。我们只要加入一条"any character"规则以及一条newline规则既可以解决这个问题:
+```
+int fee_count = 0;
+int fie_count = 0;
+int foe_count = 0;
+int fum_count = 0;
+
+%%
+fee fee_count++;
+fie fie_count++;
+foe foe_count++;
+fum fum_count++;
+.
+\n
+```
+  编辑这个文件之后，还需要重新编译应用程序以便测试我们所做的修正:
+  
   
