@@ -55,10 +55,10 @@ int main( int argc, char ** argv )
 ```
   这个扫描程序(文件名lexer.l)相当简单:
 ```
-int fee_count = 0;
-int fie_count = 0;
-int foe_count = 0;
-int fum_count = 0;
+  int fee_count = 0;
+  int fie_count = 0;
+  int foe_count = 0;
+  int fum_count = 0;
 
 %%
 fee fee_count++;
@@ -106,14 +106,18 @@ gcc count_words.o lexer.o -lfl -o count_words
   
 ```
 gcc -l<name> 会查找 libname.so | libname.a
+
+在macbook下面没有libfl.a, 对应的是libl.a, 可以修改-lfl为 -ll或创建一个libfl.a软链到libl.a.
+
+同时注意上面的lexer.l，前面几个变量的定义需要tab缩进。
 ```
 ### 尽量减少重新编译的工作量
   运行这个程序时，我们发现它除了会输出fee,fie,foe,fum等单词的出现次数，还会输出来自输入文件的其他文本。这并非我们想要的结果。 问题出现在我们忽略了词汇分析器(lexical analyzer)的一些规则，而且flex会将未被认出的文本送往输出。我们只要加入一条"any character"规则以及一条newline规则既可以解决这个问题:
 ```
-int fee_count = 0;
-int fie_count = 0;
-int foe_count = 0;
-int fum_count = 0;
+  int fee_count = 0;
+  int fie_count = 0;
+  int foe_count = 0;
+  int fum_count = 0;
 
 %%
 fee fee_count++;
@@ -124,5 +128,91 @@ fum fum_count++;
 \n
 ```
   编辑这个文件之后，还需要重新编译应用程序以便测试我们所做的修正:
+```
+// 首次运行
+gcc -c count_words.c
+flex -t lexer.l > lexer.c
+gcc -c lexer.c
+gcc count_words.o lexer.o -ll -o count_words
+
+// 修正后运行
+flex -t lexer.l > lexer.c
+gcc -c lexer.c
+gcc count_words.o lexer.o -ll -o count_words
+```
+  注意，修正后count_words.c文件并未被重新编译。分析规则的时候，make发现count_words.o已存在， 而且该文件的时间戳在其必要条件count_words.c之后，所以不需要采取任何更新的动作。 不过，分析lexer.c的时候，make发现必要条件lexer.l的时间戳在其工作目标lexer.c的之后，所以make必须更新lexer.c. 这会一次引起lexer.o、count_words的更新。 运行这个重新编译的程序， 你会看到如下结果:
+```
+// 修改前
+    int _count = 0;
+    int _count = 0;
+    int _count = 0;
+    int _count = 0;
+%%
+ _count++;
+ _count++;
+ _count++;
+ _count++;
+3 3 3 3
+
+// 修改后
+3 3 3 3
+```
+
+### 调用make
+  前面的范例做了以下假设:
+  * 项目的所有程序代码以及make描述文件全都被放在单一目录中。
+  * make描述文件的文件名为makefile、Makefile或GNUMakefile.
+  * 执行make命令时，makefile就放在用户的当前目录中。
+
+  当make在上述情况下被调用时，make会自动编译其找到的第一个工作目标。要更新另一个不同的工作目标(或多个工作目标)，请在命令行上指定目标的名称: `make lexer.c`
   
+  当make被执行时，它会读取描述文件以及找出所要更新的工作目标。如果工作目标或其必要条件中的任一文件尚未更新(或不存在)，则会(以一次一个命令的方式)执行相应规则的命令脚本中的shell命令。 这些命令被执行之后，make会假设工作目标已完成更新动作，于是移往下一个工作目标或是结束执行。
+  
+  如果你所指定的工作目标已经更新(up to date), 则make除了告诉你此状况并立即结束以外，其他什么事也不做:
+```
+$ make lexer.c
+make: `lexer.c' is up to date.
+```
+  如果你所指定的工作目标并未出现在makefile文件中，也不存在与之相应的隐含规则(implicit rule), 则make将会作出如下的响应:
+```
+bogon:count_words apple$ make test
+make: *** No rule to make target `test'.  Stop.
+```
+
+  make提供了许多命令行选项。其中最有用的选项之一是--just-print(或-n)，用来要求make显示它将为特定工作目标执行的命令，但不要实际执行它们。当你编写makefile时，这个功能特别有用。你甚至还可以在命令行上设定几乎所有的makefile变量，来改写默认值或makefile文件中所设定的值。
+```
+bogon:count_words apple$ make -n
+gcc -c count_words.c
+flex -t lexer.l > lexer.c
+gcc -c lexer.c
+gcc count_words.o lexer.o -ll -o count_words
+```
+
+### Makefile的基本语法
+  对make有了基本的认识之后，现在你差不多可以编写自己的makefile了。 这一节我们将会介绍makefile的基本语法和结构，让你得以开始使用make.
+  
+  makefile文件中一般采用“自上而下top-down”的结构，所以默认会更新最上层的工作目标(通常叫做all). 下层工作目标用来让上层工作目标保持在最新的状态，例如，用来删除无用的临时文件的clean工作目标应该放在最下层。正如你所猜测的，工作目标的名称并不一定非得是真实的文件名称不可，你可以使用任何名称。
+  
+  在前面的范例中，我们所看到的是经过简化的规则。下面是较完整的规则(但可能仍然不够完整):
+```
+target1 target2 target3: prerequisite1 prerequisite2
+  command1
+  command2
+  command3
+```
+  冒号的左边可以出现一个或多个工作目标，而冒号的右边可以出现零个或多个必要条件。如果冒号的右边没有必要条件，那么只有在工作目标所代表的文件不存在时才会进行更新动作。更新工作目标所要执行的那组命令会被称为命令脚本,不过通常只被称为命令。
+  
+  每个命令必须以跳格符(tab)开头，这个(隐含的)语法用来要求make将紧跟在跳格符之后的内容传给subshell来执行。如果你不敬意地在非命令行的第一个字符前插入了一个跳格符，则在大多数情况下，make将会把其后的文字作为命令来解释。如果你很幸运，这个误入歧途的跳格符被视为语法错误，那么你会因此收到如下的信息:
+```
+$ make
+Makefile:6: *** commands commence before first target. Stop.
+```
+
+  我们将会在第二章"规则"中讨论错综复杂的跳格符。
+  
+  make会将井号视为注释符，从井号开始到该行结束之间的所有文字都会被make忽略。你可以对作为注释的文本行进行缩排或前置空格。注释字符#并不会在代表命令的文本行中引入make的注释功能， 这一整行(包括#后面的字符)会被传给shell来执行。这行文字的处理方式取决于你所使用的shell。
+  
+  你可以使用标准的Unix转义字符--反斜线(\), 来延续过长的文本行。反斜线一般用来延续过长的命令，也可以用来延续必要条件。稍后我们会探讨处理过长必要条件的其他方法。
+  
+  到现在为止，你已经有能力编写简单的makefile了。 下一章我们探讨规则的细节。
   
