@@ -343,3 +343,5 @@ flex -t src/lexer.l > lexer.c
 gcc -c lexer.c -o lexer.o
 gcc count_words.o counter.o lexer.o /usr/lib/libl.a -o count_words
 ```
+
+  [源代码](https://github.com/walkerqiao/walkman/tree/master/sources/count_words2.tar.gz)
