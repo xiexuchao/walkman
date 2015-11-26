@@ -570,3 +570,88 @@ OUTPUT_OPTION = -o $@
   或者你可以使用附加形式地赋值动作，我们将会在其他形式地赋值动作一节中讨论此做法。
   
 ### 支持源代码控制系统的隐含规则
+  make的隐含规则还针对两种源代码控制系统RCS和SCCS提供了支持。可惜make心有余而力不足，未能跟上源代码控制系统及现代软件工程日新月异的脚本。我从未发现有人使用make所支持的源代码控制功能，也未曾看到过任何的源代码控制软件使用make这个功能。基于以下几个理由，建议各位不要使用make的这个功能。
+  
+### 一个简单的help命令
+  大型的makefile文件包含了许多工作目标，这让用户很难搞清楚。减少此类问题的方法之一，就是以一个简洁的help命令为默认目标。然而，手动维护帮助文本总是很麻烦。要避免此问题，可直接从make规则库中收集可用的命令。接下来的help工作目标将会把可用的工作目标 显示成一份排序的四个字段的列表:
+  待续， 没有看太明白
+  
+### 特殊工作目标
+  特殊工作目标是一个内置的假想工作目标，用来变更make的默认行为。例如，.PHONY这个特殊的工作目标用来声明它的必要条件并不代表一个实际的文件，而且应该被视为尚未更新。.PHONY将会是最常见的特殊工作目标，但是你还会看到其他的特殊工作目标。
+  
+  特殊工作目标的语法跟一般工作目标的语法没有什么不同，也就是target: prerequisite, 但是target并非文件而是一个假想工作目标。它们实际上比较像是用来修改make内部算法的指令。
+  
+  目前共有12个特殊工作目标，可分成三类:第一类用来在更新工作目标时修改make的行为；第二类的动作就好像时make的全局标记，用来忽略相应的工作目标；最后是.SUFFIXES这个工作目标，用来指定旧式的后缀规则。
+  
+  下面列出了最有用的工作目标修饰符:
+  * .INTERMEDIATE: 这个特殊工作目标的必要条件被视为中间文件。如果make在更新另一个工作目标期间创建了该文件，则该文件将会在make运行结束时被自动删除。如果在make想要更新该文件之际该文件已经存在了，则该文件不会被删除。当你要自定义规则链时，这会非常有用。举例来说，大多数java工具都可以接受windows形式的文件列表。自定义规则以建立列表并把它们的输出文件视为中间文件，可让make清除这些临时性文件。
+  * .SECONDARY: 这个特殊工作目标的必要条件会被视为中间文件，但不会被自动删除。.SECONDARY最常用来标示存储在程序库里的目标文件。按照惯例，这些目标文件一旦被加入档案库后就会被删除。在项目开发期间保存这些目标文件，但仍使用make进行程序库的更新，有时会比较方便。
+  * .PRECIOUS: 当make在运行期间被中断时，如果自make启动以来该文件被修改过，make将会删除它正在更新的工作目标文件。因此make不会在编译树中国年留下尚未编译完成的文件。但有些时候你却不希望make这么做，特别时在该文件很大而且编译的代价很高时。如果该文件极为珍贵，你旧该用.PRECIOUS来标示它，这样make才不会在自己被中断时删除该文件。
+  * .DELETE_ON_ERROR: 与上面的相反。
+
+### 自动产生依存关系
+  当我们将单词计数程序重构为使用头文件时，有个棘手的小问题会找上我们。尽管就此例而言，我们可以轻易地在makefile文件中手动加入目标文件与C头文件的依存关系，但是在正常的程序(而不是玩具程序)里这是一个烦人以及动辄得咎得工作。事实上，在大多数程序中，这几乎是不可能的事，因为大多数的头文件还会包含其他头文件所形成的复杂树状结构。举例来说，在我的系统上，头文件stdio.h会被扩展成包含15个其他的头文件。以手动方式解析这些关系是一个令人绝望的工作。但如果这些文件的重新编译失败，可能会导致数小时的调试，或者更糟的是因此产生出一个具有缺陷的程序。到底该怎么办呢?
+  
+  计算机擅长于搜索以及模式匹配。让我们使用一个程序来找出这些文件之间的关系，我们甚至可以使用此程序以makefile的语法编写出这些依存关系。正如你猜测，此类程序已经存在，至少对C/C++而言是这样的。在gcc中这是一个选项，许多其他的C/C++编译器也都会读进源文件并写出makefile的依存关系。例如，下面是我为stdio.h寻找依存关系的方式:
+```
+bogon:test apple$ echo "#include <stdio.h>#" > stdio.c
+bogon:test apple$ gcc -M stdio.c 
+stdio.c:1:19: warning: extra tokens at end of #include directive [-Wextra-tokens]
+#include <stdio.h>#
+                  ^
+                  //
+stdio.o: stdio.c /usr/include/stdio.h /usr/include/sys/cdefs.h \
+  /usr/include/sys/_symbol_aliasing.h \
+  /usr/include/sys/_posix_availability.h /usr/include/Availability.h \
+  /usr/include/AvailabilityInternal.h /usr/include/_types.h \
+  /usr/include/sys/_types.h /usr/include/machine/_types.h \
+  /usr/include/i386/_types.h /usr/include/sys/_pthread/_pthread_types.h \
+  /usr/include/sys/_types/_va_list.h /usr/include/sys/_types/_size_t.h \
+  /usr/include/sys/_types/_null.h /usr/include/sys/stdio.h \
+  /usr/include/sys/_types/_off_t.h /usr/include/sys/_types/_ssize_t.h \
+  /usr/include/secure/_stdio.h /usr/include/secure/_common.h
+```
+  gcc -M  somefile.c 将somefile.c所有依赖关系打印出来,包括标准类库头。 -MM不包含标准类库头。
+  
+  不错吧， 不过这里是通过运行gcc获取的。传统上有两种方法可用来将自动产生的依赖关系纳入makefile，第一种也是最古老的方法，九十在makefile结尾加入一行内容: `# Automatically generated dependencies follow - Do Not Edit`
+  然后编写一个脚本以便加入这些自动产生的脚本。这么做当然必手动加入要好，但不是很漂亮。 第二种方法就是为make加入一个include指令。如今大多数的make版本都支持include指令，GNU make当然一定可以这么做。
+  
+  因此，诀窍就是编写一个makefile工作目标，此工作目标的动作就是以-M选项对所有源文件执行gcc,并将结果保存到一个依存文件中(dependency file), 然后重新执行make以便把刚才所产生的依存文件引入makefile, 这样咎可以触发我们所需要的更新(即加入动作)。在GNU make中国年，你可以使用如下的规则来实现此目的:
+```
+depend: count_words.c lexer.c counter.c
+  $(CC) -MM $(CPPFLAGS) $^ > $@
+
+include depend
+```
+  运行make编译程序之前，你首先应该执行make depend以产生依存关系。这么做虽然不错，但是当人们对源代码加入或移除依存关系时，通常不会重新产生depend文件。这会造成无法重新编译源文件，整个工作又会变得一团乱。
+  
+  在GNU make中，你可以使用一个很酷的功能以及一个简单的算法来解决此问题。首先介绍这个简单的算法。如果我们每次为每个源文件产生依存关系，将之存入相应的依存文件(一个.d的文件名)，并以该.d文件为工作目标来加入此依存规则，这样，当源文件被改动时，make就会知道需要更新该.d文件(以及目标文件):`counter.o counter.d: src/counter.c include/counter.h include/lexer.h`
+  你可以使用如下的模式规则以及命令脚本来产生这项规则:
+```
+%.d: %.c
+  $(CC) -MM $(CPPFLAGS) $< > $@.$$$$; \
+  SED 'S,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
+  rm -f $@.$$$$
+```
+
+  现在介绍这个很酷的功能。make会把include指令所指定的任何文件视为一个需要更新的工作目标。所以，如果我们标明要引入.d文件，则make会在读进makefile文件时自动创建这些.d文件。我们的makefile加入了自动产生依存关系的功能之后会变成下面这样:
+```
+VPATH = src include
+CPPFLAGS = -I include
+
+SOURCES = count_words.c \
+  lexer.c               \
+  counter.c
+  
+count_words: counter.o lexer.o -ll
+count_words.o: counter.h
+counter.o: counter.h lexer.h
+lexer.o: lexer.h
+
+include $(subst .c,.d,$(SOURCES))
+
+%.d: %.c
+  $(CC) -MM $(CPPFLAGS) $< > $@.$$$$; \
+  SED 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
+  rm -f $@.$$$$
+```
