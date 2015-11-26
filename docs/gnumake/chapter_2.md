@@ -209,5 +209,137 @@ lexer.c: lexer.l
 
 ### 以VPATH和vpath来查找文件
   到目前为止我们所举的例子都相当简单:makefile与源文件都存放在同一个目录下。真实世界的程序比较复杂(请问，你上一次开发只有一个目录的项目在什么时候?).  现在让我们重构先前的范例，进行较实际的文件布局。我们可以通过将main构造成一个名为counter的函数来修改我们的单词计数程序。
-  
+```
+#include <lexer.h>
+#include <counter.h>
 
+void counter( int counts[4] )
+{
+    while ( yylex() )
+        ;   
+
+    counts[0] = fee_count;
+    counts[1] = fie_count;
+    counts[2] = foe_count;
+    counts[3] = fum_count;
+}
+```
+  一个可重复使用的程序库函数(library function),在头文件中应该要有一个声明(declaration), 所以让我们创建counter.h头文件来包含此声明:
+```
+#ifndef COUNTER_H_
+#define COUNTER_H_
+
+extern void counter( int counts[4] );
+
+#endif
+```
+  我们还可以把lexer.l的声明放在lexer.h头文件中:
+```
+#ifndef LEXER_H_
+#define LEXER_H_
+
+extern int fee_count, fie_count, foe_count, fum_count;
+extern int yylex( void );
+
+#endif
+```
+  然后按源码树的布局惯例，头文件会被放在include目录中，而源文件会被放在src目录里。我们也这样做，并把makefile放在它们的上层目录。那么现在范例程序的布局如下:
+```
++----- makefile
+|----- include
+_        |----- lexer.h
+_        |----- counter.h
+|----- src
+_        |----- counter.c
+_        |----- count_words.c
+_        |----- lexer.l
+```
+  既然现在我们的源文件包含了头文件，这些新产生的依存关系就应该记录在我们的makefile文件中， 这样，当我们的头文件有所变动时，才会更新相应的目标文件。
+```
+count_words: count_words.o counter.o lexer.o -ll 
+>---gcc $^ -o $@
+
+count_words.o: count_words.c include/counter.h
+>---gcc -c $<
+
+counter.o: counter.c include/counter.h include/lexer.h
+>---gcc -c $<
+
+lexer.o: lexer.c include/lexer.h
+>---gcc -c $<
+
+lexer.c: lexer.l
+>---flex -t $< > $@
+```
+
+  现在运行make, 将会看到如下的错误:
+```
+bogon:count_words2 apple$ make
+make: *** No rule to make target `count_words.c', needed by `count_words.o'.  Stop.
+```
+  咦，发生了什么事情? makefile想要更新count_words.c, 不过那是一个源文件! 让我们来看看扮演make的角色。我们的第一个必要条件是count_words.o. 我们并未看到这个文件，所以我们会去查找一个规则以便创建这个文件。用来创建count_words.o的具体规则指向count_words.c， 但为何make找不到这个源文件呢? 因为这个源文件并非位于当前目录中，二十被放在了src中。除非你告诉make, 否则它只会在当前目录中找寻工作目标以及必要条件。我们要怎么做才能让make到src目录找寻到源文件?也就是说，要如何告诉make我们的源代码放在哪里?
+  
+  你可以使用VPATH和vpath来告诉make到不同的目录去查找源文件。要解决我们眼前的问题，可以在makefile文件中对VPATH进行如下的赋值动作: VAPTH = src
+  
+  这表示，如果make所需要的文件并未放在当前目录中，就应该到src目录去找。为了make的输出更为明确，makefile本身也做了调整,此时makefile会像下面这样:
+```
+VPATH = src include
+count_words: count_words.o counter.o lexer.o -ll 
+>---gcc $^ -o $@
+
+count_words.o: count_words.c include/counter.h
+>---gcc -c $< -o $@
+
+counter.o: counter.c include/counter.h include/lexer.h
+>---gcc -c $< -o $@
+
+lexer.o: lexer.c include/lexer.h
+>---gcc -c $< -o $@
+
+lexer.c: lexer.l
+>---flex -t $< > $@
+```
+  执行make会看到如下的结果:
+```
+bogon:count_words2 apple$ make
+gcc -c src/count_words.c -o count_words.o
+gcc -c src/counter.c -o counter.o
+src/counter.c:1:10: fatal error: 'lexer.h' file not found
+#include <lexer.h>
+         ^
+1 error generated.
+make: *** [counter.o] Error 1
+```
+  请注意，现在make可以编译第一个文件了，因为它会未该文件正确填入相对路径。使用自动变量的另一个理由是: 如果你写出具体的文件名，make将无法未该文件填上正确的路径。可惜并未编译成功，因为gcc无法找到引入文件include file. 我们只要使用正确的-I选项来自定义隐含编译规则就可以解决这个问题了: CPPFLAGS = -I include
+  
+  请注意，由于头文件被放在include目录中，所以还必须调整VPATH。 VPATH = src include
+
+  现在就可以编译通过了。
+```
+
+  [源代码包]()
+CPPFLAGS = -I include
+VPATH = src include
+count_words: count_words.o counter.o lexer.o -ll 
+>---gcc $^ -o $@
+
+count_words.o: count_words.c include/counter.h
+>---gcc -c $< -o $@
+
+counter.o: counter.c include/counter.h include/lexer.h
+>---gcc -c $< -o $@ $(CPPFLAGS)
+
+lexer.o: lexer.c include/lexer.h
+>---gcc -c $< -o $@
+
+lexer.c: lexer.l
+>---flex -t $< > $@
+
+// 运行make
+bogon:count_words2 apple$ make
+gcc -c src/count_words.c -o count_words.o
+gcc -c src/counter.c -o counter.o -I include
+flex -t src/lexer.l > lexer.c
+gcc -c lexer.c -o lexer.o
+gcc count_words.o counter.o lexer.o /usr/lib/libl.a -o count_words
+```
