@@ -196,4 +196,18 @@ count_words: count_words.o counter.o lexer.o -lfl
   
 count_words.o: count_words.c
   gcc -c $<
+  
+counter.o: counter.c
+  gcc -c $<
+
+lexer.o: lexer.c
+  gcc -c $<
+
+lexer.c: lexer.l
+  flex -t $< > $@
 ```
+
+### 以VPATH和vpath来查找文件
+  到目前为止我们所举的例子都相当简单:makefile与源文件都存放在同一个目录下。真实世界的程序比较复杂(请问，你上一次开发只有一个目录的项目在什么时候?).  现在让我们重构先前的范例，进行较实际的文件布局。我们可以通过将main构造成一个名为counter的函数来修改我们的单词计数程序。
+  
+
