@@ -344,4 +344,73 @@ gcc -c lexer.c -o lexer.o
 gcc count_words.o counter.o lexer.o /usr/lib/libl.a -o count_words
 ```
 
-  [源代码](https://github.com/walkerqiao/walkman/tree/master/sources/count_words2.tar.gz)
+  [mac上可运行的源代码](https://github.com/walkerqiao/walkman/tree/master/sources/count_words2.tar.gz)
+  
+  VPATH变量的内容是一份目录列表，可供make搜索其所需要的文件。这份目录列表可用来搜索工作目标以及必要条件，但不包括脚本中所提及的文件。这份目录列表的分割符在Unix上可以是空格或冒号，在Windows上可以是空格或分号。 因此使用空格，支持各种系统。此外以空格为分割符将会使得目录将容易阅读。
+  
+  虽然VPATH变量可以解决以上的搜索问题，但是也有限制。make将会为它所需要的任何文件搜索VPATH列表中的每个目录，如果在多个目录中出现同名的文件，则make只会攫取第一个被找到的文件。有时这可能会造成问题。
+  
+  此时可以使用vpath指令。这个指令的语法: vpath pattern directory-list
+  
+  所以之前使用的VPATH可以改写成:
+  vpath %.l %.c src
+  vpath %h include
+  
+  现在，我们告诉了make应该在src下面搜索.c文件，我们还告诉它，应该在include下面查找.h文件。(所以我们可以从头文件必要条件中一处include/字样)。 在较复杂的应用程序中，这项控制功能可省去许多头痛和调试的时间。
+  
+  注意: 在macbook中， 需要将vpath %.l %.c src写成 vpath %.l src 和 vpath %.c src. 暂时没有去看原因。
+  
+  我们在此处使用vpath来解决源文件散布在多个目录中的问题。这个问题与源文件放在源代码树而目标文件放在二进制代码树时，要如何编译应用程序的问题，虽然相关但却是不同的。尽管适当地使用vpath也可以解决这个问题，不过整个工作很快就会复杂到单靠vpath无法处理的地步。我们将会在稍后详细探讨这个问题。
+  
+### 模式规则
+  我们现在所看到的makefile范例已经有点长了。如果这时一个仅包含十几个或更少文件的小程序，我们可能并不担心；但如果这是一个包含成百上千个文件的大型程序，手动指定每个工作目录、必要条件以及命令脚本将会变得不切实际。此外，在我们的makefile中，这些命令脚本代表着重复的程序代码。如果这些命令脚本包含了一个缺陷或曾经被修改过，那么我们必须跟新所有相关的规则。这将会给维护带来困难，而且会称为各种缺陷的源头。
+  
+  许多程序在读取文件以及输出文件时都会依照惯例。例如，所有C编译器都会假设，文件若是以.c为扩展名，其所包含的就是C源代码，把扩展名从.c替换成.o(Windows下面为.obj)就可以得到目标文件的文件名。在前一章中国年，我们可以看到flex输入文件使用了.l这个扩展名，它的输出使用.c这个扩展名。
+  
+  这些惯例让make可以通过文件名模式的匹配来简化规则的建立，以及提供内置规则来处理它们。举例来说，通过这些内置的规则，我们可以把之前的这多行makefile缩减为7行:
+```
+VPATH = src include
+CPPFLAGS = -I include
+
+count_words: counter.o lexer.o -ll 
+count_words.o: counter.h
+counter.o: counter.h lexer.h
+lexer.o: lexer.h
+```
+  所有内置规则都是模式规则的实例。一个模式规则看起来就像之前你所见过的一般规则，指示祝文件名(就是扩展名之前的部分)会被表示成%字符。上面这个makefile之所以可行是因为make里存在三项内置规则。第一项规则描述了如何从一个.c文件编译出一个.o文件:
+```
+%.o: %.c
+  $(COMPILE.c) $(OUTPUT_OPTION) $<
+```
+  第二项规则描述了如何从.l文件产生一个.c文件:
+```
+%.c: %.l
+  @$ (RM) $@
+  $(LEX.l) $< > $@
+```
+  最后一项特殊的规则，描述了如何从.c文件产生一个布局扩展名(通常是一个可执行文件)的文件。
+```
+%: %.c
+  $(LINK.c) $^ $(LOADLIBES) $(LDLIBS) -o $@
+```
+  我们将会进一步探讨这个语法的细节，不过首先让我们查看make的输出，看看它们时如何应用这些内置规则的。
+```
+bogon:count_words2 apple$ make
+cc  -I include  -c -o count_words.o src/count_words.c
+cc  -I include  -c -o counter.o src/counter.c
+lex  -t src/lexer.l > lexer.c
+cc  -I include  -c -o lexer.o lexer.c
+cc   count_words.o counter.o lexer.o /usr/lib/libl.a   -o count_words
+rm lexer.c
+```
+  首先，make会读取makefile, 并且将默认目标设置成count_words, 因为命令韩商并未指定任何工作目标。查看默认目标时，make发现了四个必要条件: count_words.o(makefile并未指定这个必要条件，它是由隐含规则提供的)、counter.o、lexer.o以及-ll。 接着，make会试着依次更新每个必要条件。
+  
+  当make检查第一个必要条件count_words.o时，并未发现可以处理它的具体规则(explicit rule), 不过却找到了隐含规则(implicit rule). 查看当前目录，make并未找到源文件，所以它开始搜索VPATH，而且在src目录中找到了一个相符的源文件。因为src/count_words.c没有其他必要条件，make可以自由更新count_words.o, 所以它会执行这个隐含规则。counter.o也是类似的情况，make检查lexer.o时，并未找到相应的源文件(即使在src目录中)，所以make会假设这(不存在的源文件)是一个中间文件，而且会查找"从其他源文件产生lexer.c文件"的方法。make找到了一个从.l文件产生.c文件的规则，并且注意到lexer.l的存在。因为不需要进行lexer.l的更新，所以make前往用来更新lexer.c的命令，这会产生flex命令行。接着，make会从C源文件来更新目标文件。 像这样使用一连串的规则来更新一个工作目标的动作称为规则链接.
+  
+  接下来，make会检查程序库规范-ll, 它会搜索系统的标准程序库，并且找到libl.a。
+  
+  现在make已经找到更新count_words时所需的每个必要条件，所以它会执行最后一个gcc命令。 最后, make发现自己创建了一个不必保存的中间文件，所以会对它进行清除操作。
+  
+  正如所见，在makefile文件中使用规则，可以略过许多细节。这些规则经过复杂的交互之后可产生极为强大的功能。尤其是，使用这些内置规则可大量简化makefile的规范工作。
+  
+  你可以通过在脚本中更改变量的值来定义内置规则。一个典型的规则包含一群变量，以所要执行的程序开头，并且包括用来设定主要命令行选项(比如输出文件、进行优化、进行调试等)的变量。你可以通过运行make --print-data-base列出make具有哪些默认规则(和变量)。
