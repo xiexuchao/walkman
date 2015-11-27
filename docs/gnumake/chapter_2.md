@@ -692,3 +692,4 @@ $ ar rv libcounter.a counter.o lexer.o
 a - counter.o
 a - lexer.o
 ```
+  [程序库创建命令ar介绍]()
