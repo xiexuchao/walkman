@@ -2,7 +2,7 @@
 
 * 第一章 [如何编写一个简单的makefile](https://github.com/walkerqiao/walkman/blob/master/docs/gnumake/chapter_1.md)
 * 第二章 [规则](https://github.com/walkerqiao/walkman/blob/master/docs/gnumake/chapter_2.md)
-* 第三章 [变量与宏](https://github.com/walkerqiao/walkman/blob/master/docs/gnumake/chapter_3.md)
+* 第三章 [变量与宏](https://github.com/walkerqiao/walkman/blob/master/docs/gnumake/chapter_3.md) (未完待续)
 * 第四章 [函数](https://github.com/walkerqiao/walkman/blob/master/docs/gnumake/chapter_4.md)
 * 第五章 [命令](https://github.com/walkerqiao/walkman/blob/master/docs/gnumake/chapter_5.md)
 * 第六章 [大型项目管理](https://github.com/walkerqiao/walkman/blob/master/docs/gnumake/chapter_6.md)
