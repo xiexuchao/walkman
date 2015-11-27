@@ -269,6 +269,14 @@ export CLASSPATH := $(HOME)/classes:$(PROJECT)/class
 SHELLOPTS = -x
 export SHELLOPTS
 ```
+  要将所有变量全部导出，可以这么做: `export`
+  请注意，即使这些变量的名称包含了无效的shell变量字符，make也会进行导出的动作。例如:
+```
+export valid-variable-in-make = Neat!
+show-vars:
+	env | grep '^valid-'
+	valid_variable_in_shell = Great
+	invalid-variable-in-shell = Sorry
+```
 
-	
 
