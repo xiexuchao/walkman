@@ -692,4 +692,4 @@ $ ar rv libcounter.a counter.o lexer.o
 a - counter.o
 a - lexer.o
 ```
-  [程序库创建命令ar介绍]()
+  [程序库创建命令ar介绍](https://github.com/walkerqiao/walkman/blob/master/docs/gnumake/archive-ar-command.md)
