@@ -343,3 +343,523 @@ flex -t src/lexer.l > lexer.c
 gcc -c lexer.c -o lexer.o
 gcc count_words.o counter.o lexer.o /usr/lib/libl.a -o count_words
 ```
+
+  [mac上可运行的源代码](https://github.com/walkerqiao/walkman/tree/master/sources/count_words2.tar.gz)
+  
+  VPATH变量的内容是一份目录列表，可供make搜索其所需要的文件。这份目录列表可用来搜索工作目标以及必要条件，但不包括脚本中所提及的文件。这份目录列表的分割符在Unix上可以是空格或冒号，在Windows上可以是空格或分号。 因此使用空格，支持各种系统。此外以空格为分割符将会使得目录将容易阅读。
+  
+  虽然VPATH变量可以解决以上的搜索问题，但是也有限制。make将会为它所需要的任何文件搜索VPATH列表中的每个目录，如果在多个目录中出现同名的文件，则make只会攫取第一个被找到的文件。有时这可能会造成问题。
+  
+  此时可以使用vpath指令。这个指令的语法: vpath pattern directory-list
+  
+  所以之前使用的VPATH可以改写成:
+  vpath %.l %.c src
+  vpath %h include
+  
+  现在，我们告诉了make应该在src下面搜索.c文件，我们还告诉它，应该在include下面查找.h文件。(所以我们可以从头文件必要条件中一处include/字样)。 在较复杂的应用程序中，这项控制功能可省去许多头痛和调试的时间。
+  
+  注意: 在macbook中， 需要将vpath %.l %.c src写成 vpath %.l src 和 vpath %.c src. 暂时没有去看原因。
+  
+  我们在此处使用vpath来解决源文件散布在多个目录中的问题。这个问题与源文件放在源代码树而目标文件放在二进制代码树时，要如何编译应用程序的问题，虽然相关但却是不同的。尽管适当地使用vpath也可以解决这个问题，不过整个工作很快就会复杂到单靠vpath无法处理的地步。我们将会在稍后详细探讨这个问题。
+  
+### 模式规则
+  我们现在所看到的makefile范例已经有点长了。如果这时一个仅包含十几个或更少文件的小程序，我们可能并不担心；但如果这是一个包含成百上千个文件的大型程序，手动指定每个工作目录、必要条件以及命令脚本将会变得不切实际。此外，在我们的makefile中，这些命令脚本代表着重复的程序代码。如果这些命令脚本包含了一个缺陷或曾经被修改过，那么我们必须跟新所有相关的规则。这将会给维护带来困难，而且会称为各种缺陷的源头。
+  
+  许多程序在读取文件以及输出文件时都会依照惯例。例如，所有C编译器都会假设，文件若是以.c为扩展名，其所包含的就是C源代码，把扩展名从.c替换成.o(Windows下面为.obj)就可以得到目标文件的文件名。在前一章中国年，我们可以看到flex输入文件使用了.l这个扩展名，它的输出使用.c这个扩展名。
+  
+  这些惯例让make可以通过文件名模式的匹配来简化规则的建立，以及提供内置规则来处理它们。举例来说，通过这些内置的规则，我们可以把之前的这多行makefile缩减为7行:
+```
+VPATH = src include
+CPPFLAGS = -I include
+
+count_words: counter.o lexer.o -ll 
+count_words.o: counter.h
+counter.o: counter.h lexer.h
+lexer.o: lexer.h
+```
+  所有内置规则都是模式规则的实例。一个模式规则看起来就像之前你所见过的一般规则，指示祝文件名(就是扩展名之前的部分)会被表示成%字符。上面这个makefile之所以可行是因为make里存在三项内置规则。第一项规则描述了如何从一个.c文件编译出一个.o文件:
+```
+%.o: %.c
+  $(COMPILE.c) $(OUTPUT_OPTION) $<
+```
+  第二项规则描述了如何从.l文件产生一个.c文件:
+```
+%.c: %.l
+  @$ (RM) $@
+  $(LEX.l) $< > $@
+```
+  最后一项特殊的规则，描述了如何从.c文件产生一个布局扩展名(通常是一个可执行文件)的文件。
+```
+%: %.c
+  $(LINK.c) $^ $(LOADLIBES) $(LDLIBS) -o $@
+```
+  我们将会进一步探讨这个语法的细节，不过首先让我们查看make的输出，看看它们时如何应用这些内置规则的。
+```
+bogon:count_words2 apple$ make
+cc  -I include  -c -o count_words.o src/count_words.c
+cc  -I include  -c -o counter.o src/counter.c
+lex  -t src/lexer.l > lexer.c
+cc  -I include  -c -o lexer.o lexer.c
+cc   count_words.o counter.o lexer.o /usr/lib/libl.a   -o count_words
+rm lexer.c
+```
+  首先，make会读取makefile, 并且将默认目标设置成count_words, 因为命令韩商并未指定任何工作目标。查看默认目标时，make发现了四个必要条件: count_words.o(makefile并未指定这个必要条件，它是由隐含规则提供的)、counter.o、lexer.o以及-ll。 接着，make会试着依次更新每个必要条件。
+  
+  当make检查第一个必要条件count_words.o时，并未发现可以处理它的具体规则(explicit rule), 不过却找到了隐含规则(implicit rule). 查看当前目录，make并未找到源文件，所以它开始搜索VPATH，而且在src目录中找到了一个相符的源文件。因为src/count_words.c没有其他必要条件，make可以自由更新count_words.o, 所以它会执行这个隐含规则。counter.o也是类似的情况，make检查lexer.o时，并未找到相应的源文件(即使在src目录中)，所以make会假设这(不存在的源文件)是一个中间文件，而且会查找"从其他源文件产生lexer.c文件"的方法。make找到了一个从.l文件产生.c文件的规则，并且注意到lexer.l的存在。因为不需要进行lexer.l的更新，所以make前往用来更新lexer.c的命令，这会产生flex命令行。接着，make会从C源文件来更新目标文件。 像这样使用一连串的规则来更新一个工作目标的动作称为规则链接.
+  
+  接下来，make会检查程序库规范-ll, 它会搜索系统的标准程序库，并且找到libl.a。
+  
+  现在make已经找到更新count_words时所需的每个必要条件，所以它会执行最后一个gcc命令。 最后, make发现自己创建了一个不必保存的中间文件，所以会对它进行清除操作。
+  
+  正如所见，在makefile文件中使用规则，可以略过许多细节。这些规则经过复杂的交互之后可产生极为强大的功能。尤其是，使用这些内置规则可大量简化makefile的规范工作。
+  
+  你可以通过在脚本中更改变量的值来定义内置规则。一个典型的规则包含一群变量，以所要执行的程序开头，并且包括用来设定主要命令行选项(比如输出文件、进行优化、进行调试等)的变量。你可以通过运行make --print-data-base列出make具有哪些默认规则(和变量)。
+
+### 模式
+  模式规则中的百分比字符(%)大体上等效于Unix Shell的星号，它可以代表任意多个字符。百分比字符可以放在模式中的任何地方，不过只能出现一次。百分比字符的正确用法如下:
+```
+%,v
+s%.o
+wrapper_%
+```
+  在文件名中，百分比以外的字符会按照字面进行匹配。一个模式可以包含一个前缀或一个后缀，或是这两者同时存在。当make搜索所要使用的模式规则时，它首先会查找相符的模式规则工作目标(pattern rule target). 模式规则工作目标必须以前缀开头并且后缀结尾(如果它们存在的话)。如果占到相符的模式规则工作目标，则前缀与后缀之间的字符会被作为文件名的词干(stem). 接着make会通过将词干替换到必要条件模式中来检查该模式规则的必要条件。如果所产生的文件名存在，或是可以应用另一项规则进行产生的工作，则会进行比较以及应用规则的动作。词干必须至少包含一个字符。
+  
+  事实上，你还有可能用到只有一个百分比字符的模式。此模式最常被用来编译Unix可执行程序。例如，下面就是GNU make用来编译程序的若干模式规则:
+```
+%: %.mod
+  $(COMPILE.mod) -o $@ -e $@ $^
+  
+%: %.cpp
+  $(LINK.cpp) $^ $(LOADLIBES) $(LDLIBS) -o $@
+  
+%: %.sh
+  cat $< >$@
+  chmod a+x $@
+```
+  这些模式会依次被用来从Modula源文件，经过与处理的C源文件和Bourne shell脚本产生出可执行文件。 我们将会在隐含规则库一节看到更多的隐含规则。
+  
+### 静态模式规则
+  静态模式规则只能应用在特定的工作目标上。
+```
+$(OBJECTS): %.o: %.c
+  $(CC) -c $(CFLAGS) $< -O $@
+```
+  此规则一般与模式规则的唯一差别时开头的$(OBJECTS):规范。这将使得该项规则能应用在$(OBJECTS)变量中所列举的文件上。
+  
+  此规则与模式规则十分相似。%.o模式会匹配$(OBJECTS)中所列举的每个目标文件并且取出其词干。然后该词干会被替换进%.c模式，以产生工作目标的必要条件。如果工作目标模式不存在，则make会发出警告。
+  
+  如果明确列出工作目标文件比较容易进行扩展名或其他模式的匹配，请使用静态模式规则。
+  
+### 后缀规则
+  后缀规则使用来定义隐含规则的最初方法(也是过时的方法)。旧版的make可能不支持GNU make的模式规则语法，因此你仍然会在许多makefile文件中看到后缀规则，所以你最好能了解它的语法。尽管未目标系统编译GNU make可以解决makefile的可移植性问题，但是在一些罕见的情况下你仍旧需要使用后缀规则。
+  
+  后缀规则中的工作目标，可以是一个扩展名或两个被衔接在一起的扩展名:
+```
+.c.o:
+  $(COMPILE.c) $(OUTPUT_OPTION) $<
+```
+  这令人有些困惑，因为必要条件的扩展名被摆到开头，而工作目标退居第二位。这个规则所匹配的工作目标以及必要条件跟下面的规则一样:
+```
+%.o: %.c
+  $(COMPILE.c) $(OUTPUT_OPTION) $<
+```
+  后缀规则会通过移除工作目标的扩展名以形成文件的主文件名，以及通过将工作目标的扩展名替换成必要条件的扩展名以形成必要条件。make只会在这两个扩展名都列在已知扩展名列表中时，才将之视为后缀规则。
+  
+  上面的后缀规则就是所谓的双后缀规则(double-suffix rule), 因为它包含了两个扩展名。你还可以使用单后缀规则(single-suffix rule). 没错，单后缀规则只包含了一个扩展名，也就是源文件的扩展名。 这个规则可用来创建可执行文件， 因为Unix上的可执行文件不需要扩展名。
+```
+.p:
+  $(LINK.p) $^ $(LOADLIBES) $(LDLIBS) -o $@
+```
+
+  这个规则将会从Pascl源文件产生出可执行图像(executable image). 这个规则的作用等效于下面的这个规则模式:
+```
+%: %.p
+  $(LINK.p) $^ $(LOADLIBES) $(LDLIBS) -o $@
+```
+  已知扩展名列表时语法中最奇特的部分，你可以使用.SUFFIXES这个特别的工作目标来设定已知的扩展名。 下面是.SUFFIXES默认值的第一个部分:
+```
+.SUFFIXES: .out .a .ln .o .c .cc .C .cpp .p .f .F .r .y .l
+```
+
+  你只要在makefile文件中假如.SUFFIXES规则，就剋将自己的扩展名加入此列表。.SUFFIXES: .pdf .fo .html .xml
+  
+  如果要删除所有已知的扩展名(因为它们的存在干扰到了你的扩展名)，你只要在加入.SUFFIXES规则时不指定必要条件就行了:
+  你还可以使用命令行选项--no-builtin-rules(-r).
+  
+  我们不会在本书的其余部分使用这个旧语法，因为make的模式规则较明显也比较一般化。
+  
+### 隐含规则
+  GNU make 3.80具有90个隐含规则。隐含规则不是模式规则的形式就是后缀规则的形式。这些内置的模式规则可应用于C、C++、Pascal、FORTRAN、ratfor、Modula、Texinfo、TeX(包括Tangle和Weave)、Emacs Lisp、RCS以及SCCS. 此外，有些规则是应用在这些语言的支持程序上的，比如cpp、as、yacc、lex、tangle、weave以及dvi工具。
+  
+  如果你使用到这些工具，你很有可能会发现，内置规则中已经有你所需要的东西了。如果你用到了未受支持的语言，比如java或xml, 那么你就必须编写自己的规则。单不必担心，通常你需要若干规则旧可以支持一种语言了，而且此类规则相当容易编写。
+  
+  要查看make内置了哪些规则，可使用--print-data-base(-p)命令行选项。这将会产生1000行左右的输出。在版本与版权信息之后，make会输出变量的定义，而且会为每个变量前置一行注释以说明其用途。举例来说，一个变量可以是环境变量、默认值、启动变量等。变量之后，make会输出规则。这个规则若是GNU make内置的，则会使用如下的格式:
+```
+%: %.C
+# commands to execute (built-in):
+  $(LINK.C) $^ $(LOADLIBES) $(LDLIBS) -o $@
+```
+
+  这个规则若是在makefile中定义的，则会使用如下的格式(注释中将会包含文件名和行号):
+```
+%.html: %.xml
+# commands to execute (from `Makefile` line 168):
+  $(XMLTO) $(XMLTO_FLAGS) html-nochunks $<
+```
+  
+### 隐含规则的使用
+  当make检查一个工作目标时，如果找不到可以更新它的具体规则，就会使用隐含规则。隐含规则的使用很容易: 当你将工作目标加入makefile时，只要不指定脚本就行了。这会使得make搜索隐含规则以满足工作目标的需要。通常这就是你所要的结果，但是在极少的状况下，你的开发环境可能会引发问题。举例来说，假设你的语言环境掺杂了Lisp和C源代码，如果文件editor.l和editor.c存在于同一个目录中(假设其中一个时另一个所使用的低级实现)，则make将会把Lisp文件作为flex文件(因为flex文件是以.l为扩展名)并把C源文件作为flex命令的输出。如果工作目标是editor.o,而editor.l的时间戳在editor.c的之后，则make将试图以flex的输出更新C源文件，结果你的源代码被覆盖掉了。
+  
+  要解决这个问题，你可以从内置规则库中删除这两个规则:
+```
+%.o: %.l
+%.c: %.l
+```
+  一个没有指定脚本的模式规则将会从make规则库删除相应的规则。尽管你很难遇到此类情况，不过有一件事情铭记在心:内置规则库中所包含的规则与你的makefile之间可能存在让你意外的交互。
+  
+  我们已经看过make在尝试更新工作目标时将规则链接在一起的几个例子。这样做可能会提高复杂度，我们会子啊此处查看一番。当make试着更新一个工作目标时，它会搜索隐含规则，试图找到与工作目标(target)相符的工作目标模式。对每个与工作目标相符的工作目标模式来说，make会查找相符的必要条件。也就是说，匹配工作目标模式之后，make会立即查找必要条件(源文件)。如果找到了相符的必要条件，就会使用相应的规则。有些工作目标模式具有多个可能的源文件。举例来说，一个.o的文件可能产生来自.c, .cc, .cpp, .p, .f, .r, .s以及.mod等文件，单如果搜索过所有可能的规则之后还是找不到源文件，结果会怎样呢? 此时，make会再sousuo规则依次，不过这一次会认为源文件的匹配是在跟新一个新的工作目标。通过递归地进行这样地搜索动作，make可以找到一串用来更新工作目标的规则链。我们可以再这个lexer.o范例中看到这个现象:即使.c这个中间文件不存在，通过调用从.l到.c的规则以及从.c到.o的规则，make仍旧能更新lexer.o这个工作目标。
+  
+  make可以从它的规则库中产生出卓越的处理程序。让我们做个试验:
+  首先，创建一个空的yacc源文件以及使用ci向RCS登记(也就是说，我们需要一个有版本控制的yacc源文件)：
+```
+$ touch foo.y
+$ ci foo.y
+foo.y,v <-- foo.y
+.
+initial revision: 1.1
+done
+```
+  现在，我们想问make要如何创建一个可执行foo. 我们可以用--just-print(-n)选项要求make回报它将会采取哪些行动，单不要实际执行它们。 请注意，此刻并没有makefile也没有源文件，只有一个RCS文件:
+```
+$ make -n foo
+co coo.y, v foo.y
+foo.y, v --> foo.y
+revision 1.1
+done
+bison -y foo.y
+mv -f y.tab.c foo.c
+gcc -c -o foo.o foo.c
+gcc foo.o -o foo
+rm foo.c foo.o foo.y
+```
+  找到了隐含规则链之后，make可以作出如下决定: 如果目标文件foo.o存在，就可以创建foo;如果C源文件foo.c存在，就可创建foo.o; 如果yacc源码foo.y存在，就可以创建foo.c. 最后，make发现它可以通过从RCS文件foo.y,v中调出(check out)文件foo.y来创建该文件。一旦make将此计划公式化后，就会以co调出foo.y, 以bison将之转换成foo.c, 以gcc将之编译成foo.o, 最后再次以gcc将之链接成foo，以上这些步骤全部产生自隐含规则库。 酷极了。
+  
+  链接规则的过程中所产生的文件称为中间文件，make会对它们进行特别的处理。 首先，因为中间文件不会在工作目标中出现(否则它们旧不是中间文件), 所以make不会更新中间文件；其次，make创建中间文件本身旧有更新工作目标的副作用，所以make在结束运行之前会删除这些中间文件。
+  
+### 规则的结构
+  内置规则具有标准的结构，好让它们容易自定义。现在让我们来查看此结构，并探讨有关"自定义"这方面的议题。下面是从C源文件来更新目标文件的规则:
+```
+%.o: %.c
+  $(COMPILE.c) $(OUTPUT_OPTION) $<
+```
+  这个规则的自定义完全取决于其所用到的变量。我们在此处看到了两个变量，其中的COMPILE.c是由多个其他变量所定义而成的:
+```
+COMPILE.c = $(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c
+CC = gcc
+OUTPUT_OPTION = -o $@
+```
+  你只要变更CC变量的设定值就可以更换C编译器。此外还包括用来设定编译选项的变量CFLAGS,用来设定预处理器选项的变量(CPPFLAGS)以及用来设定结构选项的变量TARGET_ARCH。
+  
+  在内置规则中使用变量的目的，就是让规则的自定义尽可能简单。因此，当你在makefile文件中设定这些变量时，务必谨慎。如果设定这些变量时随意为之，将会破坏终端用户自定义它们的能力。例如，你在makefile中做了如下的赋值动作:
+  CPPFLAGS = -I project/include
+  如果用户想再命令行上加入CPP的定义，它们一般会像这样来调用make: make CPPFLAGS=-DDEBUG
+  如果他们真的这么做了，将会意外删除编译时所需要添加的-I选项。命令行上设定的变量将会覆盖掉该变量原有的值。所以不当地在makefile中设定CPPFLAGS将会破坏大多数用户预设地自定义结果。为了避免此问题，你可以使用如下地方式重新定义编译常量:
+  COMPILE.c = $(CC) $(CFLAGS) $(INCLUDES) $(CPPFLAGS) $(TARGET_ARCH) -c
+  INCLUDES = -I project/include
+
+  或者你可以使用附加形式地赋值动作，我们将会在其他形式地赋值动作一节中讨论此做法。
+  
+### 支持源代码控制系统的隐含规则
+  make的隐含规则还针对两种源代码控制系统RCS和SCCS提供了支持。可惜make心有余而力不足，未能跟上源代码控制系统及现代软件工程日新月异的脚本。我从未发现有人使用make所支持的源代码控制功能，也未曾看到过任何的源代码控制软件使用make这个功能。基于以下几个理由，建议各位不要使用make的这个功能。
+  
+### 一个简单的help命令
+  大型的makefile文件包含了许多工作目标，这让用户很难搞清楚。减少此类问题的方法之一，就是以一个简洁的help命令为默认目标。然而，手动维护帮助文本总是很麻烦。要避免此问题，可直接从make规则库中收集可用的命令。接下来的help工作目标将会把可用的工作目标 显示成一份排序的四个字段的列表:
+  待续， 没有看太明白
+  
+### 特殊工作目标
+  特殊工作目标是一个内置的假想工作目标，用来变更make的默认行为。例如，.PHONY这个特殊的工作目标用来声明它的必要条件并不代表一个实际的文件，而且应该被视为尚未更新。.PHONY将会是最常见的特殊工作目标，但是你还会看到其他的特殊工作目标。
+  
+  特殊工作目标的语法跟一般工作目标的语法没有什么不同，也就是target: prerequisite, 但是target并非文件而是一个假想工作目标。它们实际上比较像是用来修改make内部算法的指令。
+  
+  目前共有12个特殊工作目标，可分成三类:第一类用来在更新工作目标时修改make的行为；第二类的动作就好像时make的全局标记，用来忽略相应的工作目标；最后是.SUFFIXES这个工作目标，用来指定旧式的后缀规则。
+  
+  下面列出了最有用的工作目标修饰符:
+  * .INTERMEDIATE: 这个特殊工作目标的必要条件被视为中间文件。如果make在更新另一个工作目标期间创建了该文件，则该文件将会在make运行结束时被自动删除。如果在make想要更新该文件之际该文件已经存在了，则该文件不会被删除。当你要自定义规则链时，这会非常有用。举例来说，大多数java工具都可以接受windows形式的文件列表。自定义规则以建立列表并把它们的输出文件视为中间文件，可让make清除这些临时性文件。
+  * .SECONDARY: 这个特殊工作目标的必要条件会被视为中间文件，但不会被自动删除。.SECONDARY最常用来标示存储在程序库里的目标文件。按照惯例，这些目标文件一旦被加入档案库后就会被删除。在项目开发期间保存这些目标文件，但仍使用make进行程序库的更新，有时会比较方便。
+  * .PRECIOUS: 当make在运行期间被中断时，如果自make启动以来该文件被修改过，make将会删除它正在更新的工作目标文件。因此make不会在编译树中国年留下尚未编译完成的文件。但有些时候你却不希望make这么做，特别时在该文件很大而且编译的代价很高时。如果该文件极为珍贵，你旧该用.PRECIOUS来标示它，这样make才不会在自己被中断时删除该文件。
+  * .DELETE_ON_ERROR: 与上面的相反。
+
+### 自动产生依存关系
+  当我们将单词计数程序重构为使用头文件时，有个棘手的小问题会找上我们。尽管就此例而言，我们可以轻易地在makefile文件中手动加入目标文件与C头文件的依存关系，但是在正常的程序(而不是玩具程序)里这是一个烦人以及动辄得咎得工作。事实上，在大多数程序中，这几乎是不可能的事，因为大多数的头文件还会包含其他头文件所形成的复杂树状结构。举例来说，在我的系统上，头文件stdio.h会被扩展成包含15个其他的头文件。以手动方式解析这些关系是一个令人绝望的工作。但如果这些文件的重新编译失败，可能会导致数小时的调试，或者更糟的是因此产生出一个具有缺陷的程序。到底该怎么办呢?
+  
+  计算机擅长于搜索以及模式匹配。让我们使用一个程序来找出这些文件之间的关系，我们甚至可以使用此程序以makefile的语法编写出这些依存关系。正如你猜测，此类程序已经存在，至少对C/C++而言是这样的。在gcc中这是一个选项，许多其他的C/C++编译器也都会读进源文件并写出makefile的依存关系。例如，下面是我为stdio.h寻找依存关系的方式:
+```
+bogon:test apple$ echo "#include <stdio.h>#" > stdio.c
+bogon:test apple$ gcc -M stdio.c 
+stdio.c:1:19: warning: extra tokens at end of #include directive [-Wextra-tokens]
+#include <stdio.h>#
+                  ^
+                  //
+stdio.o: stdio.c /usr/include/stdio.h /usr/include/sys/cdefs.h \
+  /usr/include/sys/_symbol_aliasing.h \
+  /usr/include/sys/_posix_availability.h /usr/include/Availability.h \
+  /usr/include/AvailabilityInternal.h /usr/include/_types.h \
+  /usr/include/sys/_types.h /usr/include/machine/_types.h \
+  /usr/include/i386/_types.h /usr/include/sys/_pthread/_pthread_types.h \
+  /usr/include/sys/_types/_va_list.h /usr/include/sys/_types/_size_t.h \
+  /usr/include/sys/_types/_null.h /usr/include/sys/stdio.h \
+  /usr/include/sys/_types/_off_t.h /usr/include/sys/_types/_ssize_t.h \
+  /usr/include/secure/_stdio.h /usr/include/secure/_common.h
+```
+  gcc -M  somefile.c 将somefile.c所有依赖关系打印出来,包括标准类库头。 -MM不包含标准类库头。
+  
+  不错吧， 不过这里是通过运行gcc获取的。传统上有两种方法可用来将自动产生的依赖关系纳入makefile，第一种也是最古老的方法，九十在makefile结尾加入一行内容: `# Automatically generated dependencies follow - Do Not Edit`
+  然后编写一个脚本以便加入这些自动产生的脚本。这么做当然必手动加入要好，但不是很漂亮。 第二种方法就是为make加入一个include指令。如今大多数的make版本都支持include指令，GNU make当然一定可以这么做。
+  
+  因此，诀窍就是编写一个makefile工作目标，此工作目标的动作就是以-M选项对所有源文件执行gcc,并将结果保存到一个依存文件中(dependency file), 然后重新执行make以便把刚才所产生的依存文件引入makefile, 这样咎可以触发我们所需要的更新(即加入动作)。在GNU make中国年，你可以使用如下的规则来实现此目的:
+```
+depend: count_words.c lexer.c counter.c
+  $(CC) -MM $(CPPFLAGS) $^ > $@
+
+include depend
+```
+  运行make编译程序之前，你首先应该执行make depend以产生依存关系。这么做虽然不错，但是当人们对源代码加入或移除依存关系时，通常不会重新产生depend文件。这会造成无法重新编译源文件，整个工作又会变得一团乱。
+  
+  在GNU make中，你可以使用一个很酷的功能以及一个简单的算法来解决此问题。首先介绍这个简单的算法。如果我们每次为每个源文件产生依存关系，将之存入相应的依存文件(一个.d的文件名)，并以该.d文件为工作目标来加入此依存规则，这样，当源文件被改动时，make就会知道需要更新该.d文件(以及目标文件):`counter.o counter.d: src/counter.c include/counter.h include/lexer.h`
+  你可以使用如下的模式规则以及命令脚本来产生这项规则:
+```
+%.d: %.c
+  $(CC) -MM $(CPPFLAGS) $< > $@.$$$$; \
+  SED 'S,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
+  rm -f $@.$$$$
+```
+
+  现在介绍这个很酷的功能。make会把include指令所指定的任何文件视为一个需要更新的工作目标。所以，如果我们标明要引入.d文件，则make会在读进makefile文件时自动创建这些.d文件。我们的makefile加入了自动产生依存关系的功能之后会变成下面这样:
+```
+VPATH = src include
+CPPFLAGS = -I include
+
+SOURCES = count_words.c \
+  lexer.c               \
+  counter.c
+  
+count_words: counter.o lexer.o -ll
+count_words.o: counter.h
+counter.o: counter.h lexer.h
+lexer.o: lexer.h
+
+include $(subst .c,.d,$(SOURCES))
+
+%.d: %.c
+  $(CC) -MM $(CPPFLAGS) $< > $@.$$$$; \
+  SED 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
+  rm -f $@.$$$$
+```
+  include指令总是应该放在手动编写的依存关系的后面，这样默认目标才不会被某个依存文件抢走。include指令可用来指定一串文件(文件名可包含通配符)。我们在此处使用了make的subst来将一串源文件的文件名转换成一串依存关系的文件名。 我们将在字符串函数一节中探讨subst的细节，现在你只要知道subst可以用来将$(SOURCES)里的文本从.c字符串转换成.d字符串。
+  
+  如果针对此makefile以--just-print选项来运行make, 则会得到如下的结果:
+```
+bogon:count_words2 apple$ make -n
+makefile:13: count_words.d: No such file or directory
+makefile:13: lexer.d: No such file or directory
+makefile:13: counter.d: No such file or directory
+cc -MM -I include src/counter.c > counter.d.$$; \
+  SED 's,\(counter\)\.o[ :]*,\1.o counter.d : ,g' < counter.d.$$ > counter.d; \
+  rm -f counter.d.$$
+lex  -t src/lexer.l > lexer.c
+cc -MM -I include lexer.c > lexer.d.$$; \
+  SED 's,\(lexer\)\.o[ :]*,\1.o lexer.d : ,g' < lexer.d.$$ > lexer.d; \
+  rm -f lexer.d.$$
+cc -MM -I include src/count_words.c > count_words.d.$$; \
+  SED 's,\(count_words\)\.o[ :]*,\1.o count_words.d : ,g' < count_words.d.$$ > count_words.d; \
+  rm -f count_words.d.$$
+rm lexer.c
+cc  -I include  -c -o count_words.o src/count_words.c
+cc  -I include  -c -o counter.o src/counter.c
+cc  -I include  -c -o lexer.o lexer.c
+cc   count_words.o counter.o lexer.o /usr/lib/libl.a   -o count_words
+```
+  一开始，make的响应看起来如同一个make的错误信息。不过不必担心，这只是一个警告而以。起先make会搜索引入文件，但是它们找不到它们，所以make会在搜索用来创建这些文件的规则之前发出"No such file or directory"这样的警告。若不像看到这个警告信息，只要为include指令前置一个连接符(-)即可。警告信息之后就可以看到make以-MM选项调用gcc以及执行sed命令的动作。请注意，make必须调用flex以便创建lexer.c, 然后在开始满足默认目标之前删除lexer.c这个临时文件。
+  
+  这一节只介绍了自动产生依存关系的功能，还有许多没有谈到，像是如何为其他语言产生依存关系或是编译树的布局。我们将会在本书的第二部分深入探讨这方面的议题。
+  
+### 管理程序库
+  程序库(archive library,通常简称library或archive)是一个特殊的文件，该文件内含其他被称为成员(member)的文件。程序库可用来将相关的目标文件聚集成比较容易操作的单元。例如C的标准库libc.a就包含了许多低级的C函数。因为程序库如此常见，所以make对它们的创建、维护以及引用提供了特别的支持。程序库的建立及修改可以通过ar程序来进行。
+  
+  现在来看一个例子。我们可以把单词计数程序中国年可重复使用的部分放到一个可以重复使用的程序库里。这个程序库有两个文件组成:counter.o和lexer.o. 我们可以使用ar命令来创建此程序库:
+```
+$ ar rv libcounter.a counter.o lexer.o
+a - counter.o
+a - lexer.o
+```
+  [程序库创建命令ar介绍](https://github.com/walkerqiao/walkman/blob/master/docs/gnumake/archive-ar-command.md)
+  
+  选项r代表我们想要以指定的目标文件来替换程序库里的成员，而选项v(verbosely)代表ar必须详细的告诉我们,它做了哪些动作。即使该程序库原本就不存在，我们还是可以使用r选项。rv选项之后的第一个参数是程序库的文件名，接着是一串目标文件(如果该程序库不存在，则有些版本的ar必须指定c选项，才会进行创建程序库的动作，不过GNU ar不必这么做。) 执行ar命令之后所显示的信息里，你将会看到他以a来表示目标文件已经被加入程序库里了。
+  以r选项来使用ar命令，可以让我们立即创建或更新一个程序库:
+```
+$ ar rv libcounter.a counter.o
+r - counter.o
+
+$ ar rv libcounter.a lexer.o
+r - lexer.o
+```
+  执行ar命令之后所显示的信息里，你将会看到它以r来表示目标文件已经被替换到程序库中。
+  一个程序库被链接到一个可执行文件的方法有好几种，最简单的方法就是在命令行上直接指定该程序库。编译器或链接器将会以文件的扩展名来判断命令行上特定文件的类型并作出正确的事情:
+```
+cc counte_words.o libcounter.a /lib/libl.a -o counte_words
+```
+  此处cc将会把libcounter.a和libl.a这两个文件视为程序库，并对它们搜索为定义的符号。在命令行上引用程序库的另一个方法就是使用-l选项:
+```
+cc counte_words.o -lcounter -ll -o counte_words
+```
+  如你所见，使用这个选项可以省略程序库文件名的前缀以及扩展名。选项-l可让命令行更加紧凑并且较容易阅读，不过它还具有极为有用的功能: 当cc看到-l选项时，就会在系统的标准目录中搜索相应的程序库。这样，程序员就不必知道程序库的确切位置，而且可以让其使用的命令行更具可移植性。 此外，在支持共享程序库(在Unix系统上就是以.so为扩展名的程序库)的系统上，连接器在搜索程序库之前，会先搜索共享程序库。这让程序在未指明的状况下也能得益于共享程序库。 这是GNU的链接器/编译器默认的行为模式。较旧版的链接器/编译器并不会进行此优化动作。
+  
+  若要变更编译器所使用的搜索路径，你可以使用-L选项来指定所要搜索的目录以及搜索的次序。这些目录应该被加载系统程序库之前，并且会被应用在命令行中的所有-l选项上。事实上，前面的哪个例子会链接失败，因为当前目录并未被列在cc的程序库搜索路径之中。我们只要以如下的方式加入当前目录就可以修正此错误:
+```
+cc counte_words.o -L. -lcounter -ll -o counte_words
+```
+  程序库为一个程序的编译过程添加了些许的复杂性。make如何协助我们简化此状态呢? GNU make为程序库的创建及链接提供了特别的支持，让我们来看看它的做法.
+  
+### 创建与更新程序库
+  在makefile里，指定程序库的方式跟指定其他文件没有什么不同，也就是指出它的文件名。下面就是一个用来创建程序库的简单规则:
+```
+libcounter.a: counter.o lexer.o
+  $(AR) $(ARFLAGS) $@ @^
+```
+  此处使用了AR变量中对应于ar程序的内置定义，以及ARFLAGS变量中的标准选项rv. 这个程序库的文件名将会被自动设定到$@里，而必要条件会被自动设定到$^里。
+  
+  现在，如果你以libcounter.a作为counte_words的一个必要条件，则make在链接可执行文件之前会更新该程序库。然而，这么做会有一个问题: 程序库里的所有成员每次都会被替换掉，即使它们并未被修改。宝贵的时间就这么浪费掉了， 不过我们可以做的更好:
+```
+libcounter.a: counter.o lexer.o
+  $(AR) $(ARFLAGS) $@ $?
+```
+  如果你将$^替换成$?，则make只会把时间戳在工作目标之后的目标文件传递给ar。
+  
+  我们还可以做的更好? 或许可以，或许不行。 尽管make可让我们更新程序库里的个别文件以及为每个目标文件成员执行一个ar命令，不过在我们探索相关细节之前，这种构建程序库的做法中的几点值得我们加以注意。make的主要目标之一，就是只更新过时(out of date)的文件, 好让处理器的使用更加有效。 可惜，这种为每个过时的成员调用一次ar的做法，很快就会让处理器陷入泥潭。如果程序库所包含的文件超过10个，此时为每个更新动作调用一次ar,其代价将会必语法是否精致还大。通过在一个具体规则中使用前面的简单方法以及调用ar,我们可以为所有文件执行一次ar编译并省掉许多的fork/exec调用。此外，以r选项来执行ar在许多系统上是个效率相当差的工作。例如，在1.9Ghz Pentium 4的机器上，从头开始编译一个大型的程序库(包含14216个成员，总计55MB)耗时4分24秒。然而，程序库建立之后，若以ar r来更新单一目标文件，则需要28秒的时间。所以，如果我们所要替换的文件超过10个，从头开始编译程序库反而较快。在这样的情况下，使用自动变量$?对每个被修改的目标文件进行程序库的更新，或许应该谨慎才对。对于较小型的程序库以及速度较快的处理器来说，你不必为了效能的因素去采用前面的简单做法，而舍弃后面较精致的语法。此时，使用特殊的程序库支持是比较好的做法。
+  
+  在GNU make中，你可以使用如下的符号来引用程序库里的成员:
+```
+libgraphics.a(bitblt.o): bitblt.o
+  $(AR) $(ARFLAGS) $@ $<
+```
+
+  此处，程序库的文件名是libgraphics.a，而成员的文件名为bitblt.o(用于bit block transfer). 语法libname.a(module.o)可用来引用特定程序库里的特定成员。这个工作目标的必要条件就是目标文件本身，而要执行的命令就是将该目标文件加入程序库。在命令中国年使用自动变量$<可取得第一个必要条件。 事实上，内置的模式规则就是在做这件事。
+  
+  最后，我们的makefile看起来会像下面这样:
+```
+VPATH = src include
+CPPFLAGS = -I include
+counte_words: libcounter.a -ll
+libcounter.a: libcounter.a(lexer.o) libcounter.a(counter.o)
+
+libcounter.a(lexer.o): lexer.o
+  $(AR) $(ARFLAGS) $@ $<
+
+libcounter.a(counter.o): counter.o
+  $(AR) $(ARFLAGS) $@ $<
+  
+counte_words.o: counter.h
+counter.o: counter.h lexer.h
+lexer.o: lexer.h
+```
+
+  对此makefile执行make将会产生如下的输出结果:
+```
+bogon:count_words2 apple$ make
+lex  -t src/lexer.l > lexer.c
+cc  -I include  -c -o lexer.o lexer.c
+ar rv libcounter.a lexer.o
+r - lexer.o
+cc  -I include  -c -o counter.o src/counter.c
+ar rv libcounter.a counter.o
+r - counter.o
+cc  -I include   src/count_words.c libcounter.a /usr/lib/libl.a   -o count_words
+rm lexer.c
+```
+  注意程序库更新规则。 自动变量$@会被扩展成程序库的文件名称，即使该工作目标在makefile中是libcounter.a(lexer.o).
+  
+  最后，还有一件事应该提到: 程序库会为它所包含的符号提供索引。较新版的ar程序会在新的成员加入程序库的时候，自动管理此索引。然而，许多较旧版本的ar并不会这么做，此时你就应该使用另一个程序(像ranlib)来创建或更新程序库的索引。在这些系统上，隐含规则将无法更新程序库。对于这些系统，你必须使用如下的规则:
+```
+libcounter.a: libcounter.a(lexer.o) libcounter.a(counter.o)
+  $(RANLIB) $@
+```
+  对于大型的程序库，你可以使用如下的规则:
+```
+libcounter.a: counter.o lexer.o
+  $(RM) $@
+  $(AR) $(ARFLAGS) $@ $^
+  $(RANLIB) $@
+```
+  当然，这个用来管理程序库成员的语法也可以使用在隐含规则中。 GNU make随附了一个用来更新程序库的内置规则。如果使用这个内置规则，我们的makefile会变成下面这样:
+```
+VAPTH = src include
+CPPFLAGS = -I include
+counte_words: libcounter.a -ll
+libcounter.a: libcounter.a(lexer.o) libcounter.a(counter.o)
+count_words.o: counter.h
+counter.o: counter.h lexer.h
+lexer.o: lexer.h
+```
+
+### 以程序库为必要条件
+  当程序库作为必要条件时，可以使用标准的文件名语法或-l语法来引用它们。使用文件名语法时:
+```
+xpong: $(OBJECTS) /lib/X11/libX11.a /lib/X11/libXaw.a
+  $(LINK) $^ -o $@
+```
+  链接器将只会读取命令行上所列出的程序库文件，以及按正常的方式来处理它们。使用-l语法时，必要条件并非真正的文件名称:
+```
+xpong: $(OBJECTS) -lX11 -lXaw
+  $(LINK) $^ -o $@
+```
+  当-l的语法出现在必要条件上时，make将会搜索相应的程序库(而且会先搜索共享程序库)以及将它的值(以绝对路径的形式)替换到$^和$?里。 第二种语法的最大有点是，它让你可以使用优先搜索共享程序库的功能，即使系统的链接器无法进行这些工作。它的另一个优点是，因为你可以自定义make的搜索路径，所以make可以找到应用程序库以及系统程序库。 总之，第一种语法将会忽略共享程序库并使用链接行上所指定的程序库。第二种语法会使得make优先选择共享程序库，也就是说，在make决定使用非共享版本的X11程序库之前，会先搜索共享版本的X11程序库。 供-l语法识别的程序库文件名格式的模式就存放在.LIBPATERNS变量中，你可以通过它来定义其他程序库的文件名格式。
+  
+  可惜有个小问题，如果makefile已经将程序库文件指定为工作目标，它就不能在必要条件对该文件使用-l选项。 举例来说，对于下面的makefile:
+```
+count_words: count_words.o -lcounter -lfl
+  $(CC) $^ -o $@
+
+libcounter.a: libcounter.a(lexer.o) libcounter.a(counter.o)
+```
+  运行make, 将会显示如下的错误信息:
+```
+No rule to make target `-lcounter`, needed by 'count_words'
+```
+  这是因为make不会把-lcounter扩展成libcounter.a并去搜索工作目标，make只会去搜索程序库。所以，如果要在makefile里进行程序库的编译工作，必须使用文件名的语法。
+  
+  
+  要让复杂程序的链接工作没有错误，可能需要使用一些手段。链接器会依次搜索命令行上所指定的程序库。所以，如果程序库A包含了一个未定义的符号，例如open，而且该符号定义在程序库B中，那么你就必须在链接命令行上于B之前指定A(也就是A依赖B). 否则，一旦链接器读进A并且看到未定义的符号open, 再回头来读取B就太迟了， 链接器并不会回头来读取前面的程序库。如你所见，程序库在命令行上的顺序相当重要。
+  
+  一旦工作目标的必要条件存放在$^和$?之后，它们的顺序就会被保存下来。所以，如果在前面的例子里使用$^,将会扩展成顺序跟必要条件完全一样的文件列表，即使必要条件跨越多想规则也是如此。也就是说，没想规则的必要条件会依照它们被看到的顺序被依次加到该工作目标的必要条件列表中。
+  
+  一个比较相关的问题就是程序库之间的相互引用，这通常称为循环引用。假设程序有所变动，使得程序库B现在应用了程序库A中所定义的符号。我们知道A必须放在B的前面，不过现在B必须放在A的前面。这个问题的解决方案，就是在B之前与之后使用A: -lA -lB -lA. 在大型且复杂的程序中，通常需要对程序库重复进行此步骤，有时会超过两次。
+  
+  这么做将会对make造成一个小问题，因为自动变量通常会丢弃重复的部分。举例来说，假设我们必须重复使用一个程序库必要条件以满足程序库循环引用的需要:
+```
+xpong: xpong.o libui.a libdynamics.a libui.a -lX11
+  $(CC) $^ -o $@
+```
+  这个必要条件列表将会被处理成如下的链接命令:
+```
+gcc xpong.o libui.a libdynamics.a /usr/lib/libX11.a -o xpong
+```
+  为解决$^的这种行为，make灵位提供了$+变量。此变量如同$^变量，不过它会保留重复的必要条件。所以，如果使用$+就可以解决这个问题。
+  
+### 双冒号规则
+  双冒号规则是一个模糊的功能，它会根据必要条件的时间戳是否在工作目标之后，以不同的命令来更新同一个工作目标。通常，当一个工作目标多次出现时，所有的必要条件会被衔接成一份列表，而且只让一个命令脚本进行更新的动作。然而，对双冒号规则而言，相同的工作目标每出现一次会被视为一个独立的实体。必须进行独立的处理。这意味着，对同一个工作目标来说，所有的规则必须时同一个类型，也就是说，它们若非全都是双冒号规则，就应该全都是单冒号规则。
+  
+  实际上，我们很难为这个功能找到有用的范例(这就是为何我会称它为一个模糊的功能)，下面是一个假造的例子:
+```
+file-list:: generate-list-script
+  chmod +x $<
+  generate-list-script $(files) > file-list
+
+file-list:: $(files)
+  generate-list-script $(files) > file-list
+```
+  我们可以通过两种方式重新产生file-list工作目标。如果产生脚本被更新，我们会将该脚本设为可执行，接着加以运行；如果是源文件被变更，我们只会运行该脚本。尽管这个例子有点牵强，不过你可以借此感觉一下如何应用这个功能。
+  
+  到目前为止，我们只是将焦点放在特定的语法以及功能的行为上，不包括将它们应用在比较复杂的情况下--这是本书的第二部分的重点。介绍过规则的大部分功能(这是make的基础)之后，接下来要讲的是变量和命令.
+  
+  
+  
