@@ -280,3 +280,6 @@ show-vars:
 ```
 
 
+##
+ ![c/c++编译过程中所用到的变量](https://github.com/walkerqiao/walkman/blob/master/images/std-compile-vars.png)
+
