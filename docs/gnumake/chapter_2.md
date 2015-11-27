@@ -655,3 +655,40 @@ include $(subst .c,.d,$(SOURCES))
   SED 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
   rm -f $@.$$$$
 ```
+  include指令总是应该放在手动编写的依存关系的后面，这样默认目标才不会被某个依存文件抢走。include指令可用来指定一串文件(文件名可包含通配符)。我们在此处使用了make的subst来将一串源文件的文件名转换成一串依存关系的文件名。 我们将在字符串函数一节中探讨subst的细节，现在你只要知道subst可以用来将$(SOURCES)里的文本从.c字符串转换成.d字符串。
+  
+  如果针对此makefile以--just-print选项来运行make, 则会得到如下的结果:
+```
+bogon:count_words2 apple$ make -n
+makefile:13: count_words.d: No such file or directory
+makefile:13: lexer.d: No such file or directory
+makefile:13: counter.d: No such file or directory
+cc -MM -I include src/counter.c > counter.d.$$; \
+  SED 's,\(counter\)\.o[ :]*,\1.o counter.d : ,g' < counter.d.$$ > counter.d; \
+  rm -f counter.d.$$
+lex  -t src/lexer.l > lexer.c
+cc -MM -I include lexer.c > lexer.d.$$; \
+  SED 's,\(lexer\)\.o[ :]*,\1.o lexer.d : ,g' < lexer.d.$$ > lexer.d; \
+  rm -f lexer.d.$$
+cc -MM -I include src/count_words.c > count_words.d.$$; \
+  SED 's,\(count_words\)\.o[ :]*,\1.o count_words.d : ,g' < count_words.d.$$ > count_words.d; \
+  rm -f count_words.d.$$
+rm lexer.c
+cc  -I include  -c -o count_words.o src/count_words.c
+cc  -I include  -c -o counter.o src/counter.c
+cc  -I include  -c -o lexer.o lexer.c
+cc   count_words.o counter.o lexer.o /usr/lib/libl.a   -o count_words
+```
+  一开始，make的响应看起来如同一个make的错误信息。不过不必担心，这只是一个警告而以。起先make会搜索引入文件，但是它们找不到它们，所以make会在搜索用来创建这些文件的规则之前发出"No such file or directory"这样的警告。若不像看到这个警告信息，只要为include指令前置一个连接符(-)即可。警告信息之后就可以看到make以-MM选项调用gcc以及执行sed命令的动作。请注意，make必须调用flex以便创建lexer.c, 然后在开始满足默认目标之前删除lexer.c这个临时文件。
+  
+  这一节只介绍了自动产生依存关系的功能，还有许多没有谈到，像是如何为其他语言产生依存关系或是编译树的布局。我们将会在本书的第二部分深入探讨这方面的议题。
+  
+### 管理程序库
+  程序库(archive library,通常简称library或archive)是一个特殊的文件，该文件内含其他被称为成员(member)的文件。程序库可用来将相关的目标文件聚集成比较容易操作的单元。例如C的标准库libc.a就包含了许多低级的C函数。因为程序库如此常见，所以make对它们的创建、维护以及引用提供了特别的支持。程序库的建立及修改可以通过ar程序来进行。
+  
+  现在来看一个例子。我们可以把单词计数程序中国年可重复使用的部分放到一个可以重复使用的程序库里。这个程序库有两个文件组成:counter.o和lexer.o. 我们可以使用ar命令来创建此程序库:
+```
+$ ar rv libcounter.a counter.o lexer.o
+a - counter.o
+a - lexer.o
+```
