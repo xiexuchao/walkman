@@ -258,3 +258,17 @@ target ... : variable ?= value
 override LDFLAGS = -EB
 ```
   当然，你只应该在非常紧迫的状况下，忽略用户所需要的赋值动作。(除非你想惹怒用户)
+  
+  环境：
+  当make启动时，所有来自环境的变量都会被自动定义成make的变量。这些变量具有非常低的优先级，所以makefile文件或命令行参数的赋值结果将会覆盖掉环境变量的值。不过，你可以使用--environment-overrides(或-e)命令行选项，让环境变量覆盖掉相应的makefile变量。
+  
+  当make被递归调用时，有若干来自上层make的变量会通过环境传递给下层的make. 默认情况下，只有原先就来自环境的变量会被导出到下层的环境之后。不过，你只要使用export指令就可以让任何环境变量被导出到环境之后:
+  
+```
+export CLASSPATH := $(HOME)/classes:$(PROJECT)/class
+SHELLOPTS = -x
+export SHELLOPTS
+```
+
+	
+
