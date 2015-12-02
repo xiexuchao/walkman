@@ -82,8 +82,70 @@ int main(int argc, char **argv)
   
 
 ### 工作目录
+  每个进程都有一个工作目录(working directory,有时称为当前工作目录). 所有相对路径名都从工作目录开始解释。进程可以用chdir函数更改其工作目录。
+### 起始目录
+  登录时，工作目录设置为起始目录(home directory),该起始目录从口令文件中的登录项中取得。
 
 ## 1.5 输入输出
+### 文件描述符
+  文件描述符是一个小的非负整数，内核用以标识一个特定进程正在存访的文件。当内核打开一个现存文件或创建一个新文件时，他就返回一个文件描述符。 当读、写文件时，就可使用它。
+  
+### 标准输入、标准输出和标准出错
+  按惯例，每当运行一个新程序时，所有的shell都为其打开三个文件描述符:标准输入、标准输出以及标准出错。 如果像简单命令ls那样没有做什么特殊处理，则这三个描述副都连向终端。 大多数shell都提供一种方法，使任何一个或所有这三个描述符都能重新定向到某一个文件: `ls > file.list`
+  
+  执行ls命令，其标准输出重新定向到名为file.list的文件上。
+  
+### 不用缓存的I/O
+  函数open, read, write, lseek以及close提供了不用缓存的I/O.这些函数都用文件描述符进行工作。
+```
+#include "apue.h"
+
+#define BUFFSIZE 8129
+
+int main(void)
+{
+    int n;
+    char buf[BUFFSIZE];
+
+    while((n = read(STDIN_FILENO, buf, BUFFSIZE)) > 0)
+        if(write(STDOUT_FILENO, buf, n) != n)
+            err_sys("write error");
+
+    if(n < 0)
+        err_sys("read error");
+
+    exit(0);
+}
+```
+  编译`gcc copy.c -o copy...`, 执行命令`ls -la . | ./copy > data`则ls-la的输出变为./copy的标准输入，继而被作为标准输出到data文件中。
+  
+  上面代码中read, write以及STDIN_FILENO, STDOUT_FILENO都是在unistd.h中定义。 这里赞不过多介绍。
+```
+这里穿插介绍下apue项目源代码结构：
+apue +---------- lib
+_    |            |------- error.c
+_    |            |------- xx.c             ==> libapue.a
+_    |            |------- xxlib.c
+_    |            |------- makefile
+_    |---------- include
+_    |             |------ apue.h
+_    |             |------ error.h
+_    |---------- subproject
+_    |             |----------  program1.c         => program1
+_    |             |----------  makefile
+_    |---------- subproject
+_    |---------- makefile
+_    |---------- make.defines.{osname}    // 包含特定os定义的make变量定义
+_    |---------- make.libapue.inc         // 编译libapue的包含文件
+_    |---------- systype.sh               // 获取os名称的脚本
+```
+  在apue根目录有一个makefile， 直接调用make可对所有项目进行编译，包括类库libapue.a。 而每个目录下面都有单独的makefile,用于编译每个子项目下面的所有程序。 这里每个子项目的程序列表都定义在makefile中。
+  
+  需要注意一点， 如果子项目修改后需要编译，同时需要确保libapue.a是最新的，从子项目里边无法确认libapue.a是否为最新。 makefile书写的问题吧。 暂时不做修改。
+  
+### 标准I/O
+  标准I/O函数提供了一种对不用缓存的
+
 ## 1.6 程序和进程
 ## 1.7 错误处理
 ## 1.8 用户识别
