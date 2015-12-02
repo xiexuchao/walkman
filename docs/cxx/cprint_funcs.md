@@ -33,11 +33,18 @@ int snprintf_s(char *restrict buffer, rsize_t bufsz, const char *restrict format
   2. 将结果写到输出流stream中
   3. 将结果输出到字符串缓冲中。对要写入的字符串(包括字符串结束符号\0)超出缓冲区数组指针的尺寸，行为是未定义的。
   4. 将结果写入字符串缓冲区中。至少写入bufsz - 1个字符。 结果字符串会以\0终止，除非bufsz为0. 如果bufsz为0， 不写入任何东西， buffer也就是一个空指针， 然而返回值(要写入的字节数目)仍然计算并返回。
-  5. 5-8和1-4一样，除了运行时检查下面的错误，并调用当前安装的约束处理函数:
+  5. 5-8和1-4一样，除了需要在运行时检查下面的错误，并调用当前安装的约束处理函数:
   <ul>
-    <li>转换说明符%n出现在格式中</li>
+    <li>格式中出现转换说明符%n</li>
+    <li>任何对应%s的参数是空指针</li>
+    <li>format或buffer是空指针</li>
+    <li>字符串或字符转换说明符中出现编码错误</li>
+    <li>(仅针对sprintf_s)存储于buffer的字符串(包括结尾终止符\0)将超出bufsz</li>
   </ul>
-  6. 
+
+  As all bounds-checked functions, printf_s, fprintf_s, sprintf_s, and snrintf_s are only guaranteed to be available if __STDC_LIB_EXT1__ is defined by the implementation and if the user defines __STDC_WANT_LIB_EXT1__ to the integer constant 1 before including <stdio.h>.
+  
+  
 
 
 
