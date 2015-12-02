@@ -14,6 +14,9 @@
   按 照 该 标 准 定 义 的 各 个 头 文 件 , 可 将 该 库 分 成 1 5 区。表 2 - 1 中列出了 C标 准 定 义 的 头 文 件 , 以及下面几节中说明的另外两个标准 ( P O S I X . 1 和 X P G 3 ) 定义的头文件。在其中也列举了 S V R 4 和 4 . 3 + B S D所支持的头文件。本章也将对这两种 U N I X 实现进行说明。
   
   ![ISO C](https://github.com/walkerqiao/walkman/blob/master/images/isoc_std.png)
+  
+  ![ISO C](https://github.com/walkerqiao/walkman/blob/master/images/iso_c1.png)
+  ![ISO C](https://github.com/walkerqiao/walkman/blob/master/images/iso_c2.png)
 
 ### 2.3 Unix系统实现
 
