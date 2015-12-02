@@ -45,7 +45,9 @@ int snprintf_s(char *restrict buffer, rsize_t bufsz, const char *restrict format
   As all bounds-checked functions, printf_s, fprintf_s, sprintf_s, and snrintf_s are only guaranteed to be available if __STDC_LIB_EXT1__ is defined by the implementation and if the user defines __STDC_WANT_LIB_EXT1__ to the integer constant 1 before including <stdio.h>.
   
   
-## `v*printf*`系列函数
+## `v*printf*系列函数`
+
+  v系列函数和上述函数套件基本一样，区别在于，使用va_list作为后面的替换参数。细节略过。详见下面的参考文章。
 
 
 
