@@ -35,8 +35,52 @@
   
   目录(directory)是一个包含目录项的文件，在逻辑上，可以认为每个目录项都包含一个文件名，同时还包含说明该文件属性的信息。文件属性是：文件类型、文件长度、文件所有者、文件的许可权(例如，其他用户能否访问该文件)、文件的最后修改时间等。 stat和fstat函数返回一个包含所有文件属性的信息结构。
 ### 文件名
-  0个或多个以斜线分割的文件名序列(可以任选地以斜线开头)构成路径名(pathname), 以斜线开头的路径名称为绝对路径名(absolute pathname), 否则称为相对路径(relative pathname).
+  目录中的各个名字称为文件名(filename).不能出现在文件名中的字符只有两个'/', 和空操作符(null).
 ### 路径名
+  0个或多个以斜线分割的文件名序列(可以任选地以斜线开头)构成路径名(pathname), 以斜线开头的路径名称为绝对路径名(absolute pathname), 否则称为相对路径(relative pathname).
+  
+  实例，列出一个目录中所有文件的名字，下面程序是ls(1)命令的主要实现部分:
+```
+#include "apue.h"
+
+int main(int argc, char **argv)
+{
+    DIR *dp;
+    struct dirent *dirp;
+
+    if(argc != 2)
+        err_quit("a single argument (the directory name) is required");
+
+    if((dp = opendir(argv[1])) == NULL)
+        err_sys("can't open %s", argv[1]);
+
+    while((dirp = readdir(dp)) != NULL)
+        printf("%s\n", dirp->d_name);
+
+    closedir(dp);
+    exit(0);
+}
+```
+  其中apue.h为公共头，包含了公共的库函数定义，以及必要的头文件引入。 这里的DIR, dirent都是需要引入`include <dirent.h>`. 
+  
+  ls(1)这种表示方法是Unix的惯用方法，用以引用Unix手册集中的一个特定项。它引用第一部分中的ls项。各部分通常用1-8表示，在每个部分中的各项则按字母顺序排列。假定你有一份所使用的Unix系统的手册。
+  
+```
+  早期的Unix系统把8个部分都集中在一本手册中，现在的趋势是把这些部分分别安排在不同的手册中:有用户专用手册、程序员专用手册、
+  系统管理员专用手册等。
+  
+  某些Unix系统把一个给定部分中的手册页又用一个大写字母进行分成若干小部分，例如， 
+  AT&T(1990e)中的所有标准I/O函数都被指明在3S部分中，例如fopen(3S).
+  
+  某些Unix系统，例如以Xenix为基础的系统，不是采用数字将手册分成若干部分，而是用C表示命令(第一部分)，S表示服务(通常是第2、3部分)等等。
+```
+
+  如果你有联机手册，则可用下面的命令查看ls命令手册页: `man 1 ls`
+  
+  上面的程序只打印目录中各个文件的名字，不显示其他信息。
+  
+  
+
 ### 工作目录
 
 ## 1.5 输入输出
