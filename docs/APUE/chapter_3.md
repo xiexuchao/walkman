@@ -54,10 +54,40 @@ int open(counst char * pathname, int oflag, .../*, mode_t mode */);
 
 int creat(counst char * pathname, mode_t mode);
 ```
+  creat的不足之处是它以只写方式打开所创建文件。在提供open的新版本之前，如果要创建一个临时文件，并要先写入该文件，然后又读该文件，则必须先调用creat, close,然后再调用open. 现在则可使用下列方式调用open:
+  open(pathname, O_RDWR|O_CREAT|O_TRUNC, mode)
 ### 3.5 close函数
+```
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+int close(int filedes);
+```
+  关闭一个文件时也释放该进程加在该文件上的所有锁记录。
+  当一个进程终止时，它所有的打开文件都由内核自动关闭。很多程序都使用这一功能而不显示地用close关闭打开的文件。
 
 ### 3.6 lseek函数
+  每个打开的文件都有一个与其关联的当前文件偏移量。它是一个非负整数，用以度量从文件开始处计算的字节数。通常，读写操作都从当前文件位置偏移量处开始，并使位移量增加所读或所写的字节数。按系统默认，当打开一个文件时，除非指定O_APPEND选择项，否则该位移量被设置为0.
+```
+#include <sys/types.h>
+#include <unistd.h>
 
+off_t lseek(int filedes, off_t offset, int whence);
+```
+  lseek成功返回新文件位移，若出错返回-1.
+  对参数offset, whence的值有关。
+  * 若whence是SEEK_SET, 则该文件的位移量设置为距文件开始处offset个字节。
+  * 若whence是SEEK_CUR, 则该文件的位移量设置为当前值加offset, offset可正可负。
+  * 若whence是SEEK_END, 则该文件的位移量设置为文件长度加offset, offset可正可负。
+  
+  若lseek成功执行，则返回新的文件位移量，为此可以用下面的方式确定一个打开文件的当前位移量:
+```
+off_t currpos;
+currpos = lseek(fd, 0, SEEK_CUR);
+```
+  这种方法也可用来确定所涉及的文件是否可以设置位移量。如果文件描述符引用的是一个管道或FIFO, 则lseek返回-1,并将errno设置为EPIPE.
+  
 ### 3.7 read函数
 
 ### 3.8 write函数
