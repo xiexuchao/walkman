@@ -143,10 +143,98 @@ _    |---------- systype.sh               // 获取os名称的脚本
   
   需要注意一点， 如果子项目修改后需要编译，同时需要确保libapue.a是最新的，从子项目里边无法确认libapue.a是否为最新。 makefile书写的问题吧。 暂时不做修改。
   
+  对每个程序而言，只要libapue.a没有改动，直接在自己的项目子目录里边添加程序名，然后make就可完成编译。
+  
 ### 标准I/O
-  标准I/O函数提供了一种对不用缓存的
+  标准I/O函数提供了一种对不用缓存的I/O函数的带缓存界面。使用标准I/O可无需担心如何选区最佳的缓存长度，例如上面程序的BUFFSIZE常数。 另一个使用标准I/O函数的优点与处理输入行有关(常常发生在Unix的应用中)。 例如，fgets函数读一完整的行，而另一方面，read函数读取指定字节数。
+  
+  我们最熟悉的标准I/O函数是printf. 在调用printf的程序中，总是包括stdio.h,因为此头文件包含了所有标准I/O的函数的原型。
+```
+#include "apue.h"
+
+int main(void)
+{
+    int c;
+    while((c = getc(stdin)) != EOF)
+        if(putc(c, stdout) == EOF)
+            err_sys("output error");
+
+
+    if(ferror(stdin))
+        err_sys("input error");
+
+    exit(0);
+}
+```
+  函数getc一次读取1字符，然后putc将此字符写到标准输出。都到输入的最后一个字节时，getc返回常数EOF. 标准输入、输出常数stdin, stdout定义在头文件stdio.h中，它们分别表示标准输入和标准输出。
 
 ## 1.6 程序和进程
+  程序时存放在磁盘文件中的可执行文件。使用6个exec函数中的一个由内核将程序读入存储器，并使其执行。
+
+### 进程和进程ID
+  程序的执行实例被称为进程。每个Unix进程都一定由一个唯一的数字标识符，称为进程ID, 进程ID总是一个非负整数。
+  
+```
+#include "apue.h"
+int main(void)
+{
+  printf("hello world from process ID %d\n", getpid());
+  exit(0);
+}
+```
+### 进程控制
+  有三个用于进程控制的主要函数: fork, exec, waitpid(exec有六种变体，但经常把它们统称为exec函数)
+```
+#include "apue.h"
+#include <sys/types.h>
+#include <sys/wait.h>
+
+int main(void)
+{
+  char buf[MAXLINE];
+  pid_t pid;
+  int status;
+
+  printf("%% "); /* 要打印%, 需要使用%% */
+
+  while(fgets(buf, MAXLINE, stdin) != NULL) {
+      buf[strlen(buf) - 1] = 0;   /* replace new line with null */
+
+      if((pid = fork()) < 0)
+          err_sys("fork error");
+
+      else if(pid == 0) { /* child process */
+          execlp(buf, buf, (char *) 0); 
+          err_ret("couldn't execute: %s", buf);
+          exit(127);
+      }   
+
+      if((pid = waitpid(pid, &status, 0)) < 0)
+          err_sys("waitpid error");
+
+      printf("%% "); 
+  }   
+  exit(0);
+}
+```
+  编译并运行代码如下
+```
+bogon:first apple$ ./proc_ctrl 
+% ls
+copy			copy_getc_putc		data			lsdir.c			proc_ctrl		procid
+copy.c			copy_getc_putc.c	lsdir			makefile		proc_ctrl.c		procid.c
+% pwd
+/Users/apple/development/github/walkcapp/apue/first
+% bogon:first apple$ 
+```
+  Unix进程控制功能可以是一个较简单的程序说明，该程序从标准输入读取命令，然后执行这些命令。这是一个类似于shell程序的基本实施部分。在这30行的程序中有许多功能需要思考:
+  * 用标准I/O函数fgets从标准输入一次读一行，当键入文件结束字符(通常是Ctrl-D)作为行的第一个字符时，fgets返回一个null指针，yushi循环终止，进程也就终止了。
+  * 因为fgets返回的每一行都以新行符号终止，后随一个null字符，故而用标准函数strlen计算此字符串的长度，然后用一个null字节替换新行符。 这一操作的目的是因为execlp函数要求的是以null结束的操作，而不是以新航符结束的参数。
+  * 调用fork创建一个新进程。新进程是调用进程的复制品，故而称调用进程为父进程，新建的进程为子进程。fork对父进程返回新进程的非负进程ID, 对子进程则返回0. 因为fork创建一个新进程，所以说他被调用一次(由父进程)，但返回两次(在父进程中和在子进程中)。
+  * 在子进程中国年，调用execlp以执行从标准输入读入的命令。这就用新的程序文件替换了进程。fork和跟随其后的exec的组合是某些操作系统所称的产生一个新进程。在Unix中，这两个部分分成两个函数。
+  * 子进程调用execlp执行新程序文件，而父进程希望等待子进程终止，这一要求由调用waitpid实现，其参数指定要等待的进程。waitpid函数也返回子进程的终止状态。在此简单程序中，没有使用这个终止状态status. 如有需要，可用此值精确地确定子进程是如何终止的。
+  * 该程序的最主要限制是不能向执行的命令传递参数。为了传递参数，先要分析输入行，然后用某种约定把参数分开，然后将分割后的各个参数传递给execlp函数。尽管如此，此程序仍可用来说明unix的进程控制功能。
+
 ## 1.7 错误处理
 ## 1.8 用户识别
 ## 1.9 信号
