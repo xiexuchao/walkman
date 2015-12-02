@@ -12,9 +12,48 @@
   文件描述符的范围是0~OPEN_MAX(见表2-7)。早期的Unix版本采用的上限值是19(允许每个进程打开20个文件),现在很多系统则将其增加至63。
   
 ### 3.3 open和openat函数
+  调用open函数可以打开或创建一个文件。
+```
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+int open(counst char * pathname, int oflag, .../*, mode_t mode */);
+```
+  我们将第三个参数写为..., 这是ANSI C说明余下参数的数目和类型可以变化的方法。对于open函数而言，仅当创建文件时才使用第三个参数。在函数原型中此参数放置在注释中。
+  * pathname: 要打开或创建的文件名字
+  * oflag: 用来说明此函数的多个选择项。用下列一个或多个常量进行或运算构成oflag参数(这些常量都定义在fcntl.h头文件中)：
+  <ul>
+    <li>O_RDONLY: 只读打开</li>
+    <li>O_WRONLY: 只写打开</li>
+    <li>O_RDWR: 读写打开</li>
+    <li>很多实现将O_RDONLY定义为0，O_WRONLY定义为1，O_RDWR定义为2，以与早期的系统兼容</li>
+    <li>O_APPEND: 每次写时都加到文件的尾端。</li>
+    <li>O_CREAT: 此文件不存在则创建它。使用此选项时，需同时说明第三个参数mode, 用其说明该文件的存取许可权位。</li>
+    <li>O_EXCL: 如果同时指定了O_CREAT，而文件已经存在，则出错。这可测试一个文件是否存在，如果不存在则创建此文件成为一个原子操作。</li>
+    <li>O_RTRUNC: 如果此文件存在，而且为只读或只写成功打开，则将其长度截短为0</li>
+    <li>O_NOCTTY: 如果pathname指的是终端设备，则不将此设备分配作为此进程的控制终端。</li>
+    <li>O_NONBLOCK: 如果pathname指的是一个FIFO、一个块特殊文件或一个字符特殊文件，则此选项为此文件的本次打开操作和后续的I/O操作设置非阻塞方式。</li>
+    <li>O_SYNC: 使每次write都等到物理I/O操作完成。</li>
+  </ul>
+  
+  由open返回的文件描述符一定是最小的未用描述符数字。这一点被很多应用程序用来在标准输入、标准输出或标准出错上打开一个新的文件。 例如，一个应用程序可以先关闭标准输出,然后打开另一个文件，实现就能了解到该文件一定会在文件描述副1上打开。 在3.12节说明dup2函数时，可以了解到有更好的方法来保证在一个给定的描述符上打开一个文件。
+  文件名和路径名截短
+  如果NAME_MAX是14，而我们却试图在当前目录中创建一个其文件名包含15个字符的新文件，此时会发生什么呢? 按照传统，早期的系统V版本，允许这种使用方法，但是总是将文件名截短为14个字符，而BSD类的系统则返回出错ENAMEETOOLONG. 这一问题不仅仅与创建新文件有关。如果NAME_MAX为14，而存在一个其名为恰恰就是14个字符的文件，那么以pathname作为其参数的任一函数(open, stat等)都会遇到这一问题。
+
+  在POSIX.1中，常数_POSIX_NO_TRUNC决定了是否要截短过长的文件名或路径名，或者返回一个出错。第12章将说明此值可以针对各个不同的文件系统进行变更。
+  
+  若_POSIX_NO_TRUNC有效，则在整个路径名超过PATH_MAX,或路径名中的任一个文件名超过NAME_MAX时，返回ENAMEETOOLONG.
 
 ### 3.4 creat函数
+  也可以使用creat函数创建一个新文件。
+```
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
+int creat(counst char * pathname, mode_t mode);
+```
 ### 3.5 close函数
 
 ### 3.6 lseek函数
