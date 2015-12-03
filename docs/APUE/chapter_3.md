@@ -409,13 +409,39 @@ write only, append
 bogon:io apple$ ./fileflag 5 5<>temp.foo 
 read write
 ```
+  实例: 在修改文件描述符标志或文件状态标志时必须谨慎，先要取得现在的标志值，然后按照希望修改它，最后设置新标志值。 不能只是执行F_SETFD, F_SETFL命令，这样好会关闭以前设置的标志位。
+  下面程序是一个对于一个文件描述符设置一个或多个文件状态标志的函数。
+```
+#include <fcntl.h>
+#include "apue.h"
+void set_fl(int fd, int flags) /** flags are file status flags to turn on **/
+{
+  int val;
+  if((val = fcntl(fd, F_GETFL, 0)) < 0)
+    err_sys("fcntl F_GETFL error");
+  val |= flags; /* turn on flags */
+  if(fcntl(fd, F_SETFL, val) < 0)
+    err_sys("fcntl F_SETFL error");
+}
+```
+  如果将中间的一条语句改为:
+  var &= ~flags; 
+  就构成了另一个函数，我们成为clr_fl, 并将在后面某个例子中用到它。赐予句是当前文件状态标志值val与flags的反码逻辑与运算。
   
+  如果在上面的程序开始处，加上下面一行以调用set_fl，则打开了同步写标志。`set_fl(STDOUT_FILENO, O_SYNC);`
 
-### 3.14 sync, fsync和fdatasync函数
+  这就造成每次write都要等待，直至把数据已写到磁盘上再返回。 在Unix中，通常write只是将数据排入队列，而实际的I/O操作则可能在以后的某个时刻进行。 数据库系统很可能需要使用O_SYNC， 这样一来，在系统崩溃的情况下， 它从write返回时就知道数据已确实写到磁盘上。
+  
+  程序运行时，设置O_SYNC标志会增加时钟时间。为了测试这一点，运行上面的程序，从磁盘上的一个文件中将1.5M字节复制到另一个文件中。然后，在此程序中设置O_SYNC标志，使其完成上述同样的工作，将两者的结果进行比较：
+  
+  
+### 3.14 ioctl函数
+  ioctl函数是I/O操作的杂物箱。 
+### 3.15 sync, fsync和fdatasync函数
 
 
 
-### 3.15 ioctl函数
+
 
 ### 3.16 /dev/fd
 
