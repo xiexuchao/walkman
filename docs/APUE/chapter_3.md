@@ -290,11 +290,29 @@ if(write(fd, buff, 100) != 100) /** and write **/
   Unix提供了一种方法使得这种操作成为原子操作，其方法就是在打开文件时设置O_APPEND标志。正如前一节所说，这就使内核每次对这种文件进行写之前，都将进程的当前位移量设置到该文件的尾端处，于是在每次写之前都不在需要调用lseek。
   
 #### 2.11.2 创建一个文件
-
+  在对open函数的O_CREAT和O_EXCL选项进行说明时，我们已经见到了另一个有关原子操作的例子。当同时指定这两个选项时，而该文件又已经存在时，open将失败。我们曾提及检查该文件是否存在已经创建该文件这两个操作是作为一个原子操作执行的。如果没有这样一个原子操作，那么可能会编写下列程序段:
+```
+if((fd = open(pathname, O_WRONLY)) < 0)
+  if(errno == ENOENT) {
+    if((fd = creat(pathname, mode)) < 0)
+      err_sys("creat error");
+  } else 
+    err_sys("open error");
+```
+  如果在打开和创建之间，另一个进程创建了该文件，那么就会发生问题。如果在这两个函数调用之间，另一个进程创建了该文件，而且又向该文件写进了一些数据，那么执行该段程序中的creat时，刚写上去的数据就会被擦去，将这两者合并在一个原子操作中，此种问题就不会发生了。
   
+  一般而言，原子操作(atomic operation)指的是多步组成的操作。如果该操作原子地执行，则或者执行完所有步，或者一步也不执行，不可能只执行所有步的一个子集。在4.15节论述link函数以及在12.3节中述及记录锁时，还将讨论原子操作。
   
 ### 3.12 dup和dup2函数
-
+  下面两个函数都可以用来复制一个现存的文件描述符:
+```
+#include <unistd.h>
+int dup(int filedes);
+int dup2(int filedes, int filedes2);
+```
+  由dup返回的新文件描述符一定时当前可用文件描述符中的最小值。用dup2则可以用filedes2参数指定新描述符的数值。如果filedes2已经打开，则先将其关闭。如若filedes等于filedes2，则dup2返回filedes2,而并不关闭它。
+  这些函数返回的新文件描述符与参数filedes共享同一个文件表项。 图3-3显示了这种情况。
+  ![图3-3](https://github.com/walkerqiao/walkman/blob/master/images/APUE/dup_kernel_data_struct.png)
 ### 3.13 sync, fsync和fdatasync函数
 
 ### 3.14 fcntl函数
