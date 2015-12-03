@@ -191,9 +191,42 @@ ssize_t read(int filedes, void *buf, size_t nbytes);
   
 
 ### 3.8 write函数
-
+```
+#include <unistd.h>
+ssize_t write(int filedes, const void *buff, size_t nbytes);
+```
+  其返回值通常与参数nbytes的值不同，否则表示出错。write出错的一个常见原因是: 磁盘已写满，或者超过了对一个给定进程的文件长度限制。
+  
+  对于普通文件，写操作从文件的当前位移量处开始。如果在打开改文件时，指定了O_APPEND选择项，则在每次写操作之前，将文件位移量设置在文件的当前结尾处。在一次成功写之后，该文件位移量增加实际写的字节数。
+  
 ### 3.9 I/O效率
+  下面看另外一个read,write函数来复制文件的程序。关于该程序，应注意以下几点:
+  * 它从标准输入读，写入标准输出，这就假定在执行本程序之前，这些标准输入、输出已经由shell安排好。确实，所有常用的Unix shelldou提供一种方法，它在标准输入上打开一个文件用于读，在标准输出上创建(或重写)一个文件。
+  * 很多应用程序假定标准输入时文件描述符0, 标准输出是文件描述符1. 本例中则用两个在unistd.h中定义的名字STDIN_FILENO和STDOUT_FILENO。
+  * 考虑到进程终止时，Unix会关闭所有打开的文件描述符，所以此程序并不关闭输入和输出文件。
+  * 本程序对文本文件和二进制文件都能工作，因为对unix内核来说，这两种文件并无区别。
+```
+#include "apue.h"
 
+#define BUFFSIZE 8192
+
+int main(void)
+{
+    int n;
+    char buf[BUFFSIZE];
+
+    while((n = read(STDIN_FILENO, buf, BUFFSIZE)) > 0 ) 
+        if(write(STDOUT_FILENO, buf, n) != n)
+            err_sys("write error");
+
+    if(n < 0)
+        err_sys("read error");
+
+    exit(0);
+}
+```
+  我们没有回答一个问题时如何选取BUFFSIZE值。在回答此问题之前，让我们先用各种不同的BUFFSIZE值来运行此程序。 下表用了18中不同的缓存长度，读1 468 802字节文件所得到的结果。
+  
 ### 3.10 文件共享
 
 ### 3.11 原子操作
