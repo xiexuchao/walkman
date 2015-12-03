@@ -313,9 +313,107 @@ int dup2(int filedes, int filedes2);
   由dup返回的新文件描述符一定时当前可用文件描述符中的最小值。用dup2则可以用filedes2参数指定新描述符的数值。如果filedes2已经打开，则先将其关闭。如若filedes等于filedes2，则dup2返回filedes2,而并不关闭它。
   这些函数返回的新文件描述符与参数filedes共享同一个文件表项。 图3-3显示了这种情况。
   ![图3-3](https://github.com/walkerqiao/walkman/blob/master/images/APUE/dup_kernel_data_struct.png)
-### 3.13 sync, fsync和fdatasync函数
+  在此图中，我们假定进程执行了: newfd = dup(1);
+  当此函数开始执行时，假定下一个可用的描述符是3(这是非常可能的，因为0，1，2由shell打开)。因为两个描述符指向同一个文件表项，所以它们共享同一个文件状态标志(读、写、添加等)以及同一个当前文件位移量。
+  每个文件描述符都有它自己的一套文件描述符标志。正如我们将在下一节中说明的那样，新描述符的执行时关闭close-on-exec文件描述符标志总是由dup函数清除。
+  
+  调用dup(filedes)等效于fcntl(filedes, F_DUPFD, 0);
+  而调用dup2(filedes, filedes2)等效于close(filedes2); fcntl(filedes, F_DUPFD, filedes2);
+  
+  在最后一种情况下，dup2并不完全等效于close, fcntl。 它们之间的区别是:
+  * dup2是一个原子操作，而close, fcntl则包含两个函数调用。有可能在close和fcntl之间插入执行信号捕获函数，它可能修改文件描述符。
+  * 在dup2和fcntl之间有些不同的errno.
+```
+dup2系统调用起源于V7, 然后传播至所有BSD版本。而复制文件描述符的fcntl方法则首先由系统III使用，系统V继续采用。SVR3.2选用了dup2函数，4.2BSD则选用了fcntl函数以及F_DUPFD功能。POSIX.1要求dup2及fcntl的F_DUPFD功能二者兼有。
+```
 
-### 3.14 fcntl函数
+### 3.13 fcntl函数
+  fcntl函数可以改变已经打开的文件的性质。
+```
+#include <sys/types.h>
+#include <unistd.h>
+#include <fcntl.h>
+
+int fcntl(int filedes, int cmd, ... /** int arg **/);
+```
+  在本节的各实例中，第三个参数总是一个整数，与上面所示函数中的注释部分相对应。但是12.3节说明记录锁时，第三个参数则指向一个结构的指针。
+  
+  fcntl函数有五个功能:
+  * 复制一个现存的描述符(cmd = F_DUPFD).
+  * 获得/设置文件描述符标记(cmd = F_GETFD或F_SETFD)
+  * 获得/设置文件状态标志(cmd = F_GETFL或F_SETFL)
+  * 获得/设置异步I/O有权(cmd = F_GETOWN或F_SETOWN)
+  * 获得/设置记录锁(cmd = F_GETLK, F_SETLK或F_SETLKW)
+  我们首先说明这十中命令值中的前七种我们将涉及与进程表项中个文件描述符相关联的文件描述符标志，以及每个文件表项中的文件状态标志， 见图3-1.
+  
+  * F_DUPFD: 复制文件描述符filedes, 新文件描述符作为函数值返回。它是尚未打开的各种描述符中大于或等于第三个参数值中各值的最小值。新描述符与filedes共享同一个文件表项。 但是，新描述符有它自己的一套文件描述符标志， 其FD_CLOEXEC文件文件描述符标志则被清除。
+  * F_GETFD: 对应于filedes的文件描述符标志作为函数值返回。 当前只定义了文件描述符标志FD_CLOEXEC.
+  * F_SETFD: 对于filedes设置文件描述符标志。新标志值按第三个参数设置。应当了解很多现存的涉及文件描述符标志的程序并不使用常数FD_CLOEXEC, 而是将此标志设置为0(系统默认，在exec时不关闭)或1(在exec时关闭)
+  * F_GETFL: 对应于filedes的文件状态标志作为函数值返回。O_RDONLY, O_WRONLY, O_RDWR| O_APPEND O_NONBLOCK O_SYNC O_ASYNC. 不幸的是， 三个存取方式标志(O_RDONLY, O_WRONLY, O_RDWR)并不各占一位(这三种标志的值各是0，1，2. 由于历史原因。这三种值互斥--一个文件只能有这三种值之一。).因此首先必须用屏蔽字O_ACCMODE取得存取方式位，然后将结果与这三种值相比较。
+  * F_SETFL: 将文件状态设置位第三个参数的值(取为整型值)。可以更改的几个标志是: O_APPEND, O_NONBLOCK, O_SYNC, O_ASYNC.
+  * F_GETOWN: 取当前接收SIGIO和SIGURG信号的进程ID或进程组ID。
+  * F_SETOWN: 设置接收SIGIO和SIGURG信号的进程ID或进程组ID. 正的arg指定一个进程ID, 负的arg表示等于arg绝对值的一个进程组ID.
+  
+  fcntl的返回值与命令有关.如果出错，所有命令都返回-1, 如果成功则返回某个其他值。
+
+  下面三个命令有特定返回值: F_DUPFD, F_GETFD, F_GETFL以及F_GETOWN。 第一个返回新的文件描述符，第二个返回相应标志，最后一个返回一个正的进程ID或负的进程组ID.
+  实例：下面程序取一个指定文件描述符的命令行参数，并对于该描述符打印其文件标志说明。
+```
+#include <sys/types.h>
+#include <fcntl.h>
+
+#include "apue.h"
+
+int main(int argc, char **argv)
+{
+    int accmode, val;
+    if(argc != 2)
+        err_quit("usage: {a.out} <descriptor#>");
+
+    if((val = fcntl(atoi(argv[1]), F_GETFL, 0)) < 0)
+        err_sys("fcntl error for fd %d", atoi(argv[1]));
+
+    accmode = val & O_ACCMODE;
+
+    if(accmode == O_RDONLY) printf("read only");
+    else if(accmode == O_WRONLY) printf("write only");
+    else if(accmode == O_RDWR) printf("read write");
+    else err_dump("unkown access mode");
+
+    if(val & O_APPEND) printf(", append");
+    if(val & O_NONBLOCK) printf(", nonblocking");
+
+#if !defined(_POSIX_SOURCE) && defined(O_SYNC)
+    if(val & O_SYNC) printf(", synchronous writes");
+#endif
+    putchar('\n');
+    exit(0);
+}
+```
+  注意，我们使用了功能测试宏_POSIX_SOURCE, 并且条件编译了POSIX.1中没有定义的文件存取标志。 下面显示了执行时的几种情况:
+```
+bogon:io apple$ ./fileflag 0
+read write
+bogon:io apple$ ./fileflag 1
+read write
+bogon:io apple$ ./fileflag 2
+read write
+bogon:io apple$ ./fileflag 0 < /dev/tty
+read only
+bogon:io apple$ ./fileflag 1 > temp.foo
+bogon:io apple$ cat temp.foo 
+write only
+bogon:io apple$ 
+bogon:io apple$ ./fileflag 2 2>>temp.foo 
+write only, append
+bogon:io apple$ ./fileflag 5 5<>temp.foo 
+read write
+```
+  
+
+### 3.14 sync, fsync和fdatasync函数
+
+
 
 ### 3.15 ioctl函数
 
