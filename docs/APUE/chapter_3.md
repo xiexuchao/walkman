@@ -163,7 +163,12 @@ bogon:io apple$ od -c file.hole
 ```
   使用od(1)命令观察该文件的实际内容。命令行中的-c标志表示以字符的方式打印文件内容。从中可以看到，文件中间的30个未写字节都被读成0. 每一行开始的一个七位数都是以八进制形式表示的字节位移量。
   
-#### od命令简介
+#### [od命令简介](http://www.ualberta.ca/dept/chemeng/AIX-43/share/man/info/en_US/a_doc_lib/cmds/aixcmds4/od.htm)
+```
+usage: od [-aBbcDdeFfHhIiLlOosvXx] [-A base] [-j skip] [-N length] [-t type]
+          [[+]offset[.][Bb]] [file ...]
+```
+  
 
 ### 3.7 read函数
 
