@@ -87,7 +87,84 @@ off_t currpos;
 currpos = lseek(fd, 0, SEEK_CUR);
 ```
   这种方法也可用来确定所涉及的文件是否可以设置位移量。如果文件描述符引用的是一个管道或FIFO, 则lseek返回-1,并将errno设置为EPIPE.
+```
+  三个符号常数SEEK_SET, SEEK_CUR, SEEK_END是由系统V引进的。
+  在系统V之前，whence被指定为0(绝对偏移量),1(相对于当前位置的偏移量)，2(相对文件尾端的位移量)。
+  很多软件仍直接使用这些数字进行编码。
   
+  在lseek中字符l表示长整型。在引入off_t数据类型之前，offset参数和返回值是长整型。 
+  lseek是由V7引进的，当时C语言中增加了长整形。(在V6中，用函数seek和tell提供类似功能)
+```
+
+```
+#include "apue.h"
+#include <sys/types.h>
+
+int main(void)
+{
+    if(lseek(STDIN_FILENO, 0, SEEK_CUR) == -1) 
+        printf("cannot seek\n");
+
+    else
+        printf("seek ok\n");
+
+    exit(0);
+}
+```
+  普通文件允许lseek, 其位移量必须是非负数，但是，某些设备可能允许负的位移量。但对于普通文件，其位移量必须是非负数。因为位移量可能是负值，所以在比较lseek的返回值时应当谨慎，不要测试它是否小于0，而要测试是否等于-1.
+```
+在80386上运行的SVR4支持/dev/kmem设备，它可以具有负的偏移量。因为位移量off_t时带符号数据类型，所以文件的最大长度减少一半。
+例如，若off_t是32位整型，则文件最大长度是2^31字节。
+```
+
+  lseek仅将当前的文件偏移量记录在内核中，它并不引起任何I/O操作。然后，该位移量用于下一个读写操作。
+  
+  文件偏移量可以大于文件的当前长度。在这种情况下，对该文件的下一次写将延长该文件，并在文件中构成一个空洞，这一点是允许的。位于文件中但没有写过的字节都被读为0.
+```
+#include "apue.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+char buf1[] = "abcdefghij";
+char buf2[] = "ABCDEFGHIJ";
+
+int main(void)
+{
+    int fd; 
+    if((fd = creat("file.hole", FILE_MODE)) < 0)
+        err_sys("creat error");
+
+    if(write(fd, buf1, 10) != 10) 
+        err_sys("buf1 write error");
+    /** offset now = 10 **/
+
+    if(lseek(fd, 40, SEEK_SET) == -1) 
+        err_sys("lseek error");
+    /** offset now = 40 **/
+
+    if(write(fd, buf2, 10) != 10) 
+        err_sys("buf2 write error");
+    /** offset now = 50 **/
+
+    exit(0);
+}
+```
+  编译，运行程序，然后可以看到如下结果:
+```
+bogon:io apple$ cat file.hole 
+abcdefghijABCDEFGHIJbogon:io apple$ 
+bogon:io apple$ od -c file.hole 
+0000000    a   b   c   d   e   f   g   h   i   j  \0  \0  \0  \0  \0  \0
+0000020   \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+0000040   \0  \0  \0  \0  \0  \0  \0  \0   A   B   C   D   E   F   G   H
+0000060    I   J                                                        
+0000062
+```
+  使用od(1)命令观察该文件的实际内容。命令行中的-c标志表示以字符的方式打印文件内容。从中可以看到，文件中间的30个未写字节都被读成0. 每一行开始的一个七位数都是以八进制形式表示的字节位移量。
+  
+#### od命令简介
+
 ### 3.7 read函数
 
 ### 3.8 write函数
