@@ -226,7 +226,7 @@ int main(void)
 }
 ```
   我们没有回答一个问题时如何选取BUFFSIZE值。在回答此问题之前，让我们先用各种不同的BUFFSIZE值来运行此程序。 下表用了18中不同的缓存长度，读1 468 802字节文件所得到的结果。
-  
+  ![用不同缓存长度进行读操作的时间结果](https://github.com/walkerqiao/walkman/blob/master/images/APUE/write_time_with_buffer.png)
 ### 3.10 文件共享
 
 ### 3.11 原子操作
