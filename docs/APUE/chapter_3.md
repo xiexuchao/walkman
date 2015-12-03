@@ -436,13 +436,51 @@ void set_fl(int fd, int flags) /** flags are file status flags to turn on **/
   
   
 ### 3.14 ioctl函数
-  ioctl函数是I/O操作的杂物箱。 
-### 3.15 sync, fsync和fdatasync函数
+  ioctl函数是I/O操作的杂物箱。 不能用本章中其他函数表示的I/O操作通常都能用ioctl表示。终端I/O是ioctl的最大使用方面。
+```
+#include <unistd.h>
+#include <sys/ioctl.h>
+int ioctl(int filedes, int request, ...);
+```
+  我们所示的原型是SVR4和4.3+BSD所使用的，而较早的伯克利系统则将第二个参数说明为unsigned long. 因为第二个参数总是一个头文件中的#define名称，所以这种细节没有什么影响。
+  
+  对于ANSI C原型，它用省略号表示其余参数。但是，通常另外只有一个参数，它常常指向一个变量或结构的指针。
+  
+  在此原型中，我们表示的只是ioctl函数本身所要求的头文件。 通常还要求另外的设备专用头文件。例如，除了POSIX.1所说明的基本操作外，终端ioctl都需要头文件<termios.h>.
+  目前，ioctl的主要用途是什么呢？我们将4.3+BSD的ioctl操作分类于下表。
+```
+类型        常数名        头文件        ioctl数
+磁标号      DIOxxx      <disklabel.h>   10
+文件I/O     FIOxxx      <ioctl.h>       7
+磁带I/O     MTIOxxx     <mtio.h>        4
+套接口I/O   SIOxxx      <ioctl.h>       25
+终端I/O     TIOxxx      <ioctl.h>       35
+```
 
-
-
-
-
-### 3.16 /dev/fd
-
+### 3.15 /dev/fd  
+  比较新的系统都提供名为/dev/fd的目录，其目录项是名为0，1，2等文件。打开文件/dev/fd/n等效于复制描述符n(假定描述符n是打开的)。
+  
+  在函数中调用: `fd = open("/dev/fd/0", mode);`
+  
+  大多数系统忽略所指定的mode, 而另外一些则要求mode是涉及的文件原先打开时所使用的mode的子集。因为上面的打开等效于: fd = dup(0);
+  
+  描述符0和fd共享同一文件表项。例如，若描述符0被只读打开，那么我们也只对fd进行读操作。 即使系统忽略打开方式，并且下列调用成功:
+  fd = open("/dev/fd/0", O_RDWR);
+  
+  我们仍然不能对fd进行写操作。
+  我们也可以用/dev/fd作为路径名参数调用creat, 或调用open，并同时指定O_CREAT. 这就允许调用creat的程序，如果路径名参数是/dev/fd/1等仍能工作。
+  
+  某些系统提供路径名为/dev/stdin, /dev/stdout和/dev/stderr. 这些等效于/dev/fd/0, /dev/fd/1和/dev/fd/2.
+  
+  /dev/fd文件主要由shell使用，这允许程序以对待其他路径名一样的方式使用路径名参数来处理标准输入和标准输出。 例如， cat(1)程序将命令行中的一个单独的-特别解释为一个输入文件名，该文件指的就是标准输入。 例如:
+  filter file2 | cat file1 - file3 | lpr
+  
+  首先cat读file1, 接着读其标准输入(也就是filter file2命令的输出), 然后读file3, 如若支持/dev/fd, 则可以删除cat对-的特殊处理，于是我们就可以键入下列命令行:
+  filter file2 | cat file1 /dev/fd/0 file3 | lpr
+  
+  在命令行使用-作为一个参数特指标准输入或标准输出已由很多程序采用。但是这会带来一些问题， 例如若用-指定第一个文件，那么它看起来就相开始了另一个命令行的选项。 /dev/fd则提高了文件名参数的一致性，也更加清晰。
+  
 ### 3.17 总结
+  本章说明了传统UNIX I/O函数。因为每个read/write都因调用系统调用而进入内核，所以称这些函数为不带缓存的I/O函数。在只使用read/write情况下， 我们观察了不同的I/O长度对读文件所需时间的影响。
+  
+  
