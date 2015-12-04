@@ -292,9 +292,26 @@ main(void)
     exit(0);
 }
 ```
+  大多数Unix系统用户根本不会和umask的值打交道。通常登录时通过shell启动文件设置一次，然后不再更改。然而，当写需要创建文件的程序时， 如果我们需要确保特定访问权限位启用，我们必须在进程运行时修改umask值。例如，如果我们想要启用任何任都可以读取文件，我们应该设置umask为0. 否则，umask值在进程运行时会产生负面影响，会导致某些权限位被关掉。
+  
+  在之前的例子中，我们使用shell的umask命令在创建文件前后打印文件模式。展示结果可以看到，子进程中修改umask不会影响父进程的umask. 
+  
+  用户可以设置umask值来控制创建文件的默认权限。 以八进制表示，一位表示要masked off的一个权限。 
+```
+Mask bit       meaning
+0400          user-read
+0200          user-write
+0100          user-execute
+0040          group-read
+0020          group-write
+0010          group-execute
+0004          other-read
+0002          other-write
+0001          other-execute
+```
   
 ### 4.9 chmod, fchmod, fchmodat函数
-
+  
 ### 4.10 粘住位(Sticky Bit)
 
 ### 4.11 chown, fchown, fchownat和lchown函数
