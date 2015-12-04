@@ -346,10 +346,64 @@ S_IRWXO       其他读、写、执行
 -----------------------------------
 ```
 
-  
-### 4.10 粘住位(Sticky Bit)
+```
+#include <sys/types.h>
+#include <sys/stat.h>
 
+#include "apue.h"
+
+int
+main(void)
+{
+    struct stat statbuf;
+
+    /** turn on set-group-ID and turn off group-execute **/
+    if(stat("foo", &statbuf) < 0)
+        err_sys("stat error for foo");
+
+    if(chmod("foo", (statbuf.st_mode & ~S_IXGRP) | S_ISGID) < 0)
+        err_sys("chmod error for foo");
+
+    /** set absolute mode to "rw-r--r--" **/
+    if(chmod("bar", S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH) < 0)
+        err_sys("chmod error for bar");
+
+    exit(0);
+}
+```
+  编译并运行，结果如下:
+```
+bogon:io apple$ ls -la foo bar
+-rw-------  1 apple  staff  0 12  4 11:39 bar
+-rw-rw-rw-  1 apple  staff  0 12  4 11:39 foo
+bogon:io apple$ ./chmod 
+bogon:io apple$ ls -la foo bar 
+-rw-r--r--  1 apple  staff  0 12  4 11:39 bar
+-rw-rwSrw-  1 apple  staff  0 12  4 11:39 foo
+```
+  `statbuf.st_mode & ~S_IXGRP`: 表示原来的st_mode与'rw-rw-rw-'进行与运算。 然后和S_ISGRP或运算。 因此foo的权限被修改为-rw-rwSrw-. 而bar权限直接修改为rw-r--r--. 通过S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH。
+  
+  同时我们可以看到，chmod后，文件日期并不发生变化。在4.18节中，我们会了解到chmod函数更新的只是i节点最近一次被更改的时间。按系统默认方式，ls -l列出的时最后修改文件内容的时间。
+  chmod函数在下列条件下自动清除两个许可权位。
+  * 如果我们试图设置普通文件的粘住位(S_ISVTX),而且又没有超级用户优先权，那么mode中的粘住位自动被关闭。这意味着只有超级用户才能设置普通文件的粘住位。这样做的理由是可以防止不怀好意的用户设置粘住位，并试图以此方式填满交换区(如果系统支持保存－正文特征的话)。
+  * 新建文件的组ID可能不是调用进程所属的组。回忆一下，新文件的组ID可能是父目录的组ID. 特别地，如果新文件地组ID不等于进程地有效组ID或者进程添加组中的一个， 以及进程没有超级用户优先数，那么set-group-ID会被关闭。 这就防止了用户创建一个set-group-ID文件，而该文件是由并非该用户所属的组拥有的。
+  
+
+### 4.10 粘住位(Sticky Bit)
+  S_ISVTX位有一段有趣的历史。 在Unix的早期版本中，有一位被称为粘住位(sticky bit)。如果一个可执行文件的这一位被设置了，那么在该程序第一次执行并结束时，该程序正文的一个文本被保存在交换区。(程序的正文部分时机器指令部分。)这使得下次执行该程序的时候能较快地将其装入内存区。 其原因是: 在交换区，该文件是被连续存放的， 而在一般的Unix文件系统中，文件的各数据块很可能是随即存放的。 对于常用的应用程序，例如文本编辑程序和编译程序的个部分常常设置它们所在的文件粘住位。 自然，对交换区中可以同时存放的设置了粘住位的文件数有一定限制的， 以免过多占用交换区空间，但无论如何这是一个有用的技术。 因为在系统再次自举前，文件的正文部分总是在交换区中，所以使用了名字“粘住”。 后来的Unix版本称之位save-text bit, 因此也就有了常数S_ISVTX. 现今较新的Unix系统大多数都具有虚存系统以及快速文件系统，所以不再需要使用这种技术。
+  
+  SVR4和4.3+BSD中粘住位的主要针对目录。如果对一个目录设置了粘住位，则只有对该目录具有写许可权的用户并且满足下列条件之一，才能删除或更名该目录下的文件:
+  * 拥有该文件
+  * 拥有此目录
+  * 是超级用户
+
+  目录/tmp和/var/spool/uucp/public是设置粘住位的候选者--这两个目录是任何用户都可以在其中创建文件的目录。这两个目录对任一用户的许可权通常都是读写和执行。 但是用户不能删除或更名属于其他人的文件，为此在这两个目录的文件方式中都设置了粘住位。
+  
 ### 4.11 chown, fchown, fchownat和lchown函数
+  chown函数可用于更改文件的用户ID和组ID.
+  
+
+
 
 ### 4.12 文件尺寸
 
