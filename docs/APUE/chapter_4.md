@@ -197,14 +197,102 @@ S_IXOTH       其他-执行
     <li>若适当的组存取许可权位被设置，则允许存取</li>
     <li>否则拒绝存取</li>
   </ul>
-  4. 
+  4. 若使得那个的其他用户存取许可位被设置，则允许存取，否则拒绝存取。
+  
+  按顺序执行这四步。注意，如若进程拥有此文件，则按用户存取许可权批准或拒绝该进程对文件的存取--不查看组存取许可权。相类似，进程并不拥有该文件，但进程属于某个适当的组，按组存取许可权批准或拒绝该进程对文件的存取--不察看其他用户的存取许可权。
 
 ### 4.6 新文件和目录的所属关系
+  在第三章中，当说明用open或creat创建新文件时，没有说明赋予新文件的用户ID和组ID的值是什么。4.20节将说明如何创建一个新目录以及mkdir函数。关于新目录的所有权的规则与本节将说明的新文件的所有权规则相同。
+  
+  新文件的用户ID设置为进程的有效用户ID， 关于组ID, POSIX.1允许选择下列之一作为新文件的组ID.
+  1. 新文件的组ID可以是进程的有效组ID
+  2. 新文件的组ID可以是它所在目录的组ID.
 
 ### 4.7 access和faccessat函数
+  正如前面所说，当用open函数打开一个文件时，内核以进程的有效用户ID和有效组ID为基础执行其存取许可权测试。有时，进程也希望按照其实际用户ID和实际组ID来测试其存取能力。例如，当一个进程使用set-user-ID或set-group-ID特征作为另一个用户组运行时，这就可能需要。即使一个进程可能已经set-user-ID为root, 它仍可能相验证实际用户能否存取一个给定的文件。access函数是按实际用户ID和实际组ID进行存取许可权测试的。
+```
+#include <unistd.h>
+int access(const char *pathname, int mode)
+```
+  其中mode是按下列常数逐位或运算:
+  * R_OK: 测试读许可权
+  * W_OK: 测试写许可权
+  * X_OK: 测试执行许可权
+  * F_OK: 测试文件是否存在
 
+  实例：展示access函数的使用
+```
+#include <sys/types.h>
+#include <fcntl.h>
+#include "apue.h"
+
+int
+main(int argc, char **argv)
+{
+    if(argc != 2)
+        err_quit("usage: a.out <pathname>");
+
+    if(access(argv[1], R_OK) < 0)
+        err_ret("access error for %s", argv[1]);
+    else
+        printf("read access OK\n");
+
+    if(open(argv[1], O_RDONLY) < 0)
+        err_ret("open error for %s", argv[1]);
+    else
+        printf("open for reading OK\n");
+
+    exit(0);
+}
+```
+  
 ### 4.8 umask函数
+  至此，我们已经说明了每个文件相关联的9个存取许可权位，在此基础上我们可以说明与每个进程相关联的方式创建屏蔽字。
+  umask函数为进程设置文件方式创建屏蔽字，并返回以前的值。(这是少数几个没有出错返回的函数之一。)
+```
+#include <sys/types.h>
+#include <sys/stat.h>
 
+mode_t umask(mode_t cmask);
+```
+  其中，参数cmask是由S_IRUSR, S_IWUSR等常量进行逐位"或"构成的。
+  
+  在进程创建一个新文件或新目录时，就一定会使用文件创建屏蔽字(回忆3.3和3.4节，在那里我们说明了open和creat函数。这两个函数都有一个参数mode,它指定了新文件的存取许可权)。我们将在4.20节说明如何创建一个新目录，在文件方式创建屏蔽字中为1的位，在文件mode中的相应位则一定被转成0.
+  
+  实例:程序创建两个文件，创建第一个时，umask值为0，创建第二个时，umask值禁止所有组和其他存取许可权。若运行此程序可得到如下结果，从中可见存取许可权是如何设置的。
+```
+bogon:io apple$ umask
+0022
+bogon:io apple$ ls -la foo bar 
+-rw-------  1 apple  staff  0 12  4 11:39 bar
+-rw-rw-rw-  1 apple  staff  0 12  4 11:39 foo
+bogon:io apple$ umask
+0022
+```
+
+```
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
+#include "apue.h"
+
+#define RWRWRW (S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)
+int
+main(void)
+{
+    umask(0);
+    if(creat("foo", RWRWRW) < 0)
+        err_sys("creat error for foo");
+
+    umask(S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+    if(creat("bar", RWRWRW) < 0)
+        err_sys("creat error for bar");
+
+    exit(0);
+}
+```
+  
 ### 4.9 chmod, fchmod, fchmodat函数
 
 ### 4.10 粘住位(Sticky Bit)
