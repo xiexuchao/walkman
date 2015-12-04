@@ -457,7 +457,7 @@ int ftruncate(int fd, off_t length);
   目前有多种Unix文件系统的实现。例如，SVR4支持两种不同类型的磁盘文件系统:传统的Unix系统V文件系统(S5), 以及统一文件系统UFS. 
   
   我们可以把一个磁盘分成多个分区。每个分区可以包含一个文件系统。
-  
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/disk_range_fs.png)
 
 ### 4.15 link, linkat, unlink, unlinkat和remove函数
 
