@@ -401,6 +401,16 @@ bogon:io apple$ ls -la foo bar
   
 ### 4.11 chown, fchown, fchownat和lchown函数
   chown函数可用于更改文件的用户ID和组ID.
+```
+#include <sys/types.h>
+#include <unistd.h>
+
+int chown(const char *pathname, uid_t owner, gid_t group);
+int fchown(int fd, uid_t owner, gid_t group);
+int lchown(const char *pathname, uid_t owner, gid_t group);
+```
+  车了所引用的文件是符号连接以外，这三个函数的操作相类似。 在符号连接情况下， lchown更改符号连接本身的所有者，而不是该符号连接被指向的文件。
+  
   
 
 
