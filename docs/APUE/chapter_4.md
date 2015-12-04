@@ -56,6 +56,76 @@ S_ISFIFO()      管道或FIFO
 S_ISLNK()       符号连接(POSIX.1或SVR4无此类型)
 S_ISSOCK()      套接字(POSIX.1或SVR4无此类型)
 ```
+  实例: 从命令行参数读取参数，并判断每个参数对应的文件属于什么类型的。
+```
+#include <sys/types.h>
+#include <sys/stat.h>
+
+#include "apue.h"
+
+int main(int argc, char **argv)
+{
+    int i;
+    struct stat buf;
+    char *ptr;
+
+    for(i = 0; i < argc; i++)
+    {   
+        printf("%s: ", argv[i]);
+        if(lstat(argv[i], &buf) < 0) {
+            err_ret("lstat error");
+            continue;
+        }   
+
+        if      (S_ISREG(buf.st_mode)) ptr = "regular";
+        else if (S_ISDIR(buf.st_mode)) ptr = "directory";
+        else if (S_ISCHR(buf.st_mode)) ptr = "character special";
+        else if (S_ISBLK(buf.st_mode)) ptr = "block special";
+        else if (S_ISFIFO(buf.st_mode)) ptr = "fifo";
+
+#ifdef S_ISLNK
+        else if (S_ISLNK(buf.st_mode)) ptr = "symbolic link";
+#endif
+#ifdef S_ISSOCK
+        else if (S_ISSOCK(buf.st_mode)) ptr = "socket";
+#endif
+        else ptr = "** unknown mode **";
+        printf("%s\n", ptr);
+    }   
+    exit(0);
+}
+```
+
+```
+$ ./filetype /vmunix /etc/ /dev/ttya /dev/sd0a /var/spool/cron/FIFO /bin /dev/printer
+/vmunix: regular
+/etc: directory
+/dev/ttya: character special
+/dev/sd0a: block special
+/var/spool/cron/FIFO: fifo
+/bin: symbolic link
+/dev/printer: socket
+```
+
+  上面代码中我们特地使用了lstat而没有使用stat, 因为stat是不检查符号连接的。
+  
+  早期的Unix版本，并不提供S_ISxxx, 于是需要将st_mode与屏蔽字S_IFMT逻辑与，然后与名为S_IFxxx的常数相比较。
+```
+#define S_ISDIR(mode) (((mode) & S_IFMT) == S_IFDIR)
+```
+
+  我们说过，普通文件是最主要的文件类型，但是观察一下在一个特定系统中各种文件的比例是很有意思的。 下表显示了一个中等规模的系统中的统计值。这一数据由后面4.21节的程序得到的。
+```
+文件类型          计数值            比例(%)
+普通文件          30 369            91.7
+目录               1 901            5.7
+符号连接             416            1.3
+字符特殊             373            1.1
+块特殊                61            0.2
+套接口                 5            0.0
+FIFO                   1            0.0
+```
+
 
 ### 4.4 设置用户ID和组ID
 
