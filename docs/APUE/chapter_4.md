@@ -458,6 +458,16 @@ int ftruncate(int fd, off_t length);
   
   我们可以把一个磁盘分成多个分区。每个分区可以包含一个文件系统。
   ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/disk_range_fs.png)
+  
+  i节点是固定长度的记录项，它包含有关文件的信息。
+```
+在V7中，i节点占用64个字节，在4.3+BSD中，i节点占用128个字节。 在SVR4中，在磁盘上一个i节点的长度与文件系统的类型有关:
+S5 i节点占用64字节，而UFS i节点占用128字节。
+```
+  如果要了解i节点的详情， 需要参考下图:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/inode.png)
+  注意上图中的下面几个点:
+  * 
 
 ### 4.15 link, linkat, unlink, unlinkat和remove函数
 
