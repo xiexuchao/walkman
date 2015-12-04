@@ -49,7 +49,12 @@ struct stat {
 ```
 宏              文件类型
 S_ISREG()       普通文件
-
+S_ISDIR()       目录文件
+S_ISCHR()       字符特殊文件
+S_ISBLK()       块特殊文件
+S_ISFIFO()      管道或FIFO
+S_ISLNK()       符号连接(POSIX.1或SVR4无此类型)
+S_ISSOCK()      套接字(POSIX.1或SVR4无此类型)
 ```
 
 ### 4.4 设置用户ID和组ID
