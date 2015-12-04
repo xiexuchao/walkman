@@ -311,6 +311,41 @@ Mask bit       meaning
 ```
   
 ### 4.9 chmod, fchmod, fchmodat函数
+  chmod, fchmod, fchmodat函数允许我们对既有文件进行权限修改。
+```
+#include <sys/stat.h>
+int chmod(const char *pathname, mode_t mode);
+int fchmod(int fd, mode_t mode);
+int fchmodat(int fd, const char *pathname, mode_t mode, int flag);
+```
+  chmod在指定的文件上进行操作，而fchmod则对已打开的文件进行操作。fchmodat在pathname参数是绝对路径或当fd参数值为AT_FDCWD，pathname参数相对路径时行为和chmod一样。否则，fchmodat根据打开的fd计算pathname. flag参数可以用于改变fchmodat的行为--设置为AT_SYMLINK_NOFOLLOW，fchmodat不会跟着symbolic links.
+  
+  为了更改一个文件的许可权位，进程的有效用户ID必须等于文件的所有者，或者该成进程必须具有超级用户许可权。
+  参数mode时下表所示常数的某种逐位或运算。
+```
+mode                  说明
+-----------------------------------
+S_ISUID       执行时set-user-ID
+S_ISGID       执行时set-group-ID
+S_ISVTX       保存正文
+-----------------------------------
+S_IRWXU       用户(所有者)读写和执行
+  S_IRUSR     用户(所有者)读
+  S_IWUSR     用户(所有者)写
+  S_IXUSR     用户(所有者)执行
+-----------------------------------
+S_IRWXG       组读、写、执行
+  S_IRGRP     组读
+  S_IWGRP     组写
+  S_IXGRP     组执行
+-----------------------------------
+S_IRWXO       其他读、写、执行
+  S_IROTH     其他读
+  S_IWOTH     其他写
+  S_IXOTH     其他执行
+-----------------------------------
+```
+
   
 ### 4.10 粘住位(Sticky Bit)
 
