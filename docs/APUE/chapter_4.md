@@ -738,6 +738,14 @@ bogon:io apple$ ls  -lu foo bar
   
 
 ### 4.21 mkdir, mkdirat和rmdir函数
+  目录使用mkdir, mkdirat函数创建， 使用rmdir删除。
+```
+#include <sys/stat.h>
+int mkdir(const char *pathname, mode_t mode);
+int mkdirat(int fd, const char *pathname, mode_t mode);
+```
+  这些函数创建一个新的，空目录。 入口.和..是自动创建的。 特定的文件访问权限，模式，是通过进程的掩码创建的文件模式修改的。
+  
 
 ### 4.22 读取目录
 
