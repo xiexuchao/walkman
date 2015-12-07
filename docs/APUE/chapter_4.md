@@ -631,7 +631,47 @@ unlink          o
   ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/function_ftime_affect.png)
 
 ### 4.20 futimens, utimensat和utimes函数
+  有多个函数可修改文件的访问时间和修改时间。 tutimens和utimensat函数为特定时间戳指定纳秒粒度，使用timespec结构(和stat家族类似的时间结构)。
+```
+#include <sys/stat.h>
+int futimens(int fd, const struct timespec times[2]);
+int utimensat(int fd, const char *path, const struct timespec times[2], int flag);
+```
+  两个函数，时间数组的第一个元素包含的是访问时间，第二个包含修改时间。 两个时间都是日历时间，都是从Epoch开始计数的秒。 部分秒使用纳秒表示。
+  时间戳可以使用下面四种方式中的一种表示:
+  1. times参数是一个null指针。 这种情况下，两种时间戳都被设置为当前时间。
+  2. times参数指向两个timespec结构数组。如果其中任某一个的tv_nsec域具有UTIME_NOW， 那么相应的时间戳被设置为当前时间。而相应的tv_sec会被忽略掉。
+  3. times参数指向两个timespec结构的数组。如果其中某个元素的tv_nsec域被设置为UTIME_OMIT， 那么相应的时间戳不会改变。相应的tv_sec域会被忽略。
+  4. times参数指向两个timespec结构的数组，其中tv_nsec域不是设置为UTIME_NOW或UTIME_OMIT, 这种情况下，相应的时间戳被设置为相应tv_sec,tv_nsec指定的时间值。
+  
+  执行这些函数所需要的权限依赖于times参数的值。
+  * 如果times都是null指针或者某个元素的tv_nsec设置为UTIME_NOW， 要么进程的有效用户ID必须等于文件所有者的用户ID, 进程必须具有文件的写权限， 或者进程必须是超级用户进程。
+  * 如果times是非空指针，或者tv_nsec具有非UTIME_NOW或UTIME_OMIT， 那么进程的有效用户ID必须等于文件所有者用户ID, 或者进程必须是超级用户进程。 仅仅拥有文件写权限是不够的。
+  * 如果times是非空指针，并且两个tv_nsec域都被设置为UTIME_OMIT, 不用执行什么权限检查的。
+  
+  使用futimens, 需要打开文件来改变其时间。 utimensat函数提供了一种方式改变文件的时间使用文件的名字。 pathname参数根据fd参数相对计算出来， fd可以是文件描述符也可以是一个打开的目录或者是特殊的值AT_FDCWD来强制计算当前目录作为路径查找当前路径。 如果pathname指定绝对路径，那么fd参数就被忽略掉。
 
+  utimensat的flag参数可以用于将来修改默认行为。 如果AT_SYMLINK_NOFOLLOW标签被设置，那么符号连接本身的时间被改变(如果pathname引用的是符号连接). 默认的行为是修改符号连接指向的文件的时间。
+  
+  futimens和futimensat都是POSIX.1引入的。 第三个函数utimes如下:
+```
+#include <sys/time.h>
+int utimes(const char *pathname, const struct timeval times[2]);
+```
+  utimes函数操作pathname, times参数是两个时间戳的指针。但是是使用秒和微秒表示的:
+```
+struct timeval{
+  time_t tv_sec; /** seconds **/
+  long tv_usec;  /** microseconds **/
+}
+```
+
+  注意，我们不能为状态修改时间指定一个值(st_ctim), 即i节点上次修改的时间-因为这个字段是在utime被调用的时候自动更新的。
+  在某些版本的Unix系统，touch(1)命令使用了这些函数中的某个。 标准归档程序， tar(1), cpio(1)也选择型调用了这些函数来设置文件的时间到时间值里边， 当文件被打包的时候。
+  
+  例子: 下面程序使用open的O_TRUNC选项将文件截短为0长度， 但是不改变它们的访问时间或修改时间。要实现这点，该程序首先使用stat函数获取这些时间， 截短文件，然后重新使用futimens重置这些时间。
+  
+  
 ### 4.21 mkdir, mkdirat和rmdir函数
 
 ### 4.22 读取目录
