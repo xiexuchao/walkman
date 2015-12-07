@@ -671,7 +671,72 @@ struct timeval{
   
   例子: 下面程序使用open的O_TRUNC选项将文件截短为0长度， 但是不改变它们的访问时间或修改时间。要实现这点，该程序首先使用stat函数获取这些时间， 截短文件，然后重新使用futimens重置这些时间。
   
+```
+#include "apue.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <utime.h>
+
+/**
+ * truncate file to zero size,
+ * but not modify the access and modify time
+ * 1. first use stat get the times: st_mtime, st_atime
+ * 2. truncate file to zero
+ * 3. reset the times to original value
+ */
+
+int
+main(int argc, char **argv)
+{
+    int i, fd; 
+    struct stat statbuf;
+    struct utimbuf timebuf;
+
+    for(i = 1; i < argc; i++)
+    {   
+        if(stat(argv[i], &statbuf) < 0) { /** fetch current times **/
+            err_ret("%s: stat error", argv[i]);
+            continue;
+        }   
+
+        if((fd = open(argv[i], O_RDWR | O_TRUNC)) < 0) { /** truncate to zero **/
+            err_ret("%s: open error", argv[i]);
+            continue;
+        }   
+
+        timebuf.actime = statbuf.st_atime;
+        timebuf.modtime = statbuf.st_mtime;
+
+        if(utime(argv[1], &timebuf) < 0) /** reset times **/
+            err_ret("%s: utime error", argv[i]);
+
+        close(fd);
+    }   
+    exit(0);
+}
+
+/**
+编译运行结果：
+bogon:io apple$ ls -l bar foo
+-rw-r--r--  1 apple  staff  0 12  4 11:39 bar
+-rw-rwSrw-  1 apple  staff  0 12  4 11:39 foo
+bogon:io apple$ ls -lu bar foo
+-rw-r--r--  1 apple  staff  0 12  7 15:13 bar
+-rw-rwSrw-  1 apple  staff  0 12  7 15:13 foo
+bogon:io apple$ date
+2015年12月 7日 星期一 17时00分21秒 HKT
+bogon:io apple$ ./truncate_no_amtime foo bar
+bogon:io apple$ ls  -l foo bar
+-rw-r--r--  1 apple  staff  0 12  7 17:00 bar
+-rw-rw-rw-  1 apple  staff  0 12  4 11:39 foo
+bogon:io apple$ ls  -lu foo bar
+-rw-r--r--  1 apple  staff  0 12  7 15:13 bar
+-rw-rw-rw-  1 apple  staff  0 12  7 15:13 foo
+*/
+```
   
+
 ### 4.21 mkdir, mkdirat和rmdir函数
 
 ### 4.22 读取目录
