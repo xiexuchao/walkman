@@ -478,9 +478,83 @@ S5 i节点占用64字节，而UFS i节点占用128字节。
   
 
 ### 4.15 link, linkat, unlink, unlinkat和remove函数
+  前一节，我们看到一个文件可以由多个目录指向它的i-node。 我们可以使用link, linkat向给定的文件创建连接。
+```
+#include <unistd.h>
+int link(const char *existingpath, const char *newpath);
+int linkat(int efd, const char *existingpath, int nfd, const char *newpath, int flag);
 
+/** both return 0 if OK, -1 on error
+```
+  这些函数创建新的目录入口newpath, 它引用存文件文件existingpath. 如果newpath已经存在， 返回错误。 只有newpath的最后一部分被创建。 其他的部分必须已经存在。
+  
+  linkat函数，原来存在的文件使用efd和existingpath来指定， 新的pathname是由nfd和newpath指定。默认情况下，如果文件描述符被设置为AT_FDCWD， 那么相应的pathname如果是相对路径，那么就根据当前目录计算相对路径。 如果路径pathname为绝对路径，那么相应的参数文件描述符被忽略掉。
+  
+  如果既存文件为符号连接，flag参数控制linkat函数是否创建一个连接到符号连接或者符号连接要指向的文件。如果flag设置为AT_SYMLINK_FOLLOW， 那么就会创建符号连接的连接。 如果flag is clear, 那么会给符号连接自己创建一个连接。
+  
+  新目录入口的创建和增加连接计数必须是原子操作。(回忆前面3.11原子操作的概念)
+  
+  很多实现需要两个pathname都在相同的文件系统中， 虽然POSIX.1允许支持不同文件系统的连接实现。如果实现支持创建目录的硬连接，那么仅仅限制超级用户可以创建。 这个限制的存在是因为硬连接可能会导致文件系统的循环， 文件系统的很多进程都无法处理这种循环。很多文件系统是心啊禁用硬连接也是出于这个原因。
+  
+  要删除既存目录入口， 我们可以调用unlink函数。
+  
+```
+#include <unistd.h>
+int unlink(const char *pathname);
+int unlinkat(int fd, const char *pathname, int flag);
+```
+
+  这两个函数删除既存目录入口， 并递减pathname引用的文件计数。 如果还有其他连接连到该文件，可以通过其他入口来访问这些文件数据。 如果发生错误， 文件不变动。
+  
+  就像前面提到的， unlink一个文件， 我们必须有包含该目录入口(就是我们想要删除的目录入口)目录的写权限和执行权限。我们在4.10也提到过，如果粘住位设置在这个目录上， 那么必须具有这个目录的写权限， 并满足下面条件之一:
+  * 拥有这个文件
+  * 拥有该目录
+  * 具有超级用户权限
+  
+
+  仅仅当连接数减少到0， 文件的内容才会被删除。 其他阻止文件内容被删除掉的条件: 只要一些有进程打开这个文件， 它的内容就不被删除。 当文件关闭， 内核首先检查有多少进程打开该文件。 如果达到0， 那么内核然后检查连接数量， 如果也为0， 那么这个文件的内容就会被删除掉。
+  
+  如果pathname参数是相对路径， 然么unlinkat函数根据fd文件描述符指定相应的目录来计算pathname的路径。 如果fd参数设置为AT_FDCWD, 那么pathname相对于调用进程的当前工作目录。如果pathname为绝对路径，那么忽略掉fd参数。
+  
+  flag参数给调用者一种改变unlinkat默认行文的机会。当设置为AT_REMOVEDIR标志，unlinkat函数可以用于删除目录， 类似于rmdir. 若flag为空，unlinkat操作类似unlink.
+  
+```
+#include <fcntl.h>
+#include "apue.h"
+
+
+int main(void)
+{
+    if(open("tempfile", O_RDWR) < 0)
+        err_sys("open error");
+
+    if(unlink("tempfile") < 0)
+        err_sys("unlink error");
+
+    printf("file unlinked\n");
+
+    sleep(15);
+    printf("done\n");
+    exit(0);
+}
+```
+  运行上面的代码，可以看到， 进程尚未结束的时候，虽然调用了unlink，但是磁盘里边的空间尚未释放， 而此时tempfile已经不存在了。当进程结束， tempfile的内容才被清除， 空间得以释放。
+  
+  unlink的这个特性常常被程序用于清理自己创建的临时文件， 程序奔溃后，临时文件也不会保留在磁盘中。 进程创建文件使用open或creat， 然后立即使用unlink来删除它。 文件内容尚未删除， 因为进程还打开它。 只有当进程关闭或者终止的时候，这样才让内核来关闭它打开的文件， 文件内容也会被删除掉。
+  
+  如果pathname是一个符号连接， unlink删除符号连接， 而非符号连接引用的文件。没有给定符号连接来函数删除符号连接引用的文件的函数。
+  
+  超级用户能调用unlink使用pathname指定目录，如果系统支持， 但是函数rmdir应用于替代unlink来删除目录。 我们后面4.21会介绍rmdir函数。
+  
+  我们也可以使用remove函数来删除一个文件或目录。 对于文件，remove等价于unlink. 对于目录来说，remove等价于rmdir.
+```
+#include <stdio.h>
+int remove(const char *pathname);
+```
+
+  
 ### 4.16 rename和renameat函数
-
+  
 ### 4.17 符号链接
 
 ### 4.18 创建和读取符号链接
