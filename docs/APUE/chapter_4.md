@@ -554,8 +554,33 @@ int remove(const char *pathname);
 
   
 ### 4.16 rename和renameat函数
+  文件或目录可以使用rename, renameat函数来重命名。
+```
+#include <stdio.h>
+int rename(const char *oldname, const char *newname);
+int renameat(int oldfd, const char *oldname, int newfd, const char *newname);
+```
+  有几种条件需要针对这几个函数进行描述， 依赖oldname是否引用文件、目录还是符号连接。 我们也描述如果newname已经存在的情况。
+  1. 如果oldname指定的是文件而非目录， 那么我们可以重命名文件或符号连接。 这种情况下，newname存在的话，它不能是目录。 如果newname存在并且不是目录，那么删除它，然后将oldname重命名为newname. 这时我们需要具有包含oldname和newname的目录的写权限, 既然我们需要两个目录都改变。
+  2. 如果oldname指定的是目录， 那么我们是在重命名目录。 如果newname存在，它必须引用一个目录， 并且目录必须为空.(当我们说目录为空时，我们的意思是目录的入口只有.和..)。 如果newname存在，并且是空目录， 它被删除，然后oldname重命名为newname. 另外，当我们重命名目录时， newname不能包含路径oldname为前缀的名字。例如，我们不能将/usr/foo 重命名为/usr/foo/testdir, 因为， 旧的路径名/usr/foo是新路径名/usr/foo/testdir的路径前缀，不能被删除掉。
+  3. 如果oldname或newname是符号连接引用， 那么连接本身被处理， 而非它们涉及的文件被处理。
+  4. 我们不能重命名.和..。 更准确的说，.和..都不能出现在oldname和newname的最后一个部分中。
+  5. 特别情况，如果oldname和newname都引用同一个文件， 那么该函数成功返回，但是什么也不做。
+  
+  如果newname已经存在，我们需要权限删除它。 同时，因为我们需要删除oldname的目录入口，可能创建newname的目录入口，我们需要包含oldname和newname的目录的写权限和执行权限。
+
+  renameat函数提供的功能类似于rename函数。除了当oldname和newname都引用相对路径名。 如果oldname指定相对路径名， 它相对oldfd来计算路径名。newname同样相对于newfd。 oldfd, newfd都可以设置为AT_FDCWD, 根据当前目录计算相应目录路径名。
+  
+  
   
 ### 4.17 符号链接
+  符号连接是文件的间接指针， 不想前面章节描述的硬连接， 硬连接是直接连向文件的i-node. 符号连接引入是相对硬连接的限制而来的。
+  * 硬连接通常需要连接和文件在相同的文件系统中。
+  * 只有超级用户才能创建目录的硬连接(当底层文件系统支持的话)
+  
+  符号连接没有它指向的文件系统的限制， 任何人都能创建到目录的符号连接。 符号连接一般用于"移动"文件或者整个目录的层级结构到另外一个系统的某个位置。
+
+  当使用引用文件名的函数，我们需要知道如否函数是否跟的是符号连接。如果函数跟的符号连接， 那么函数的路径名参数引用文件指定的
 
 ### 4.18 创建和读取符号链接
 
