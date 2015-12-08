@@ -49,6 +49,17 @@ int main(int argc, char **argv)
   ANSI C和POSIX.1都要求argv[argc]是一个空指针。这就意味着，后面的循环处理`for(i = 0; argv[i] != NULL; i++)`是ok的。
 
 ### 7.5 环境表
+  每个程序都接收到一张环境表。与参数表一样，环境表也是一个字符指针数组，其中每个指针包含一个以null结束的字符串地址。全局变量environ则包含了该指针数组的地址。
+  `extern char **environ;`
+  例如，如果该环境变量包含五个字符串，那么它看起来可能如图7-2所示。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/environ_demo.png)
+  
+  其中每个字符串的结束处都有一个null字符。我们称environ为环境指针，指针数组为环境表，其中各指针指向的字符串为环境字符串。
+  
+  按照惯例，环境由: name=value这样的字符串组成，这与图7-2中所示相同。大多数预定义名完全由大写字母组成，但这只是一个惯例。
+  在历史上，大多数unix系统对main函数提供了第三个参数，他就是环境表地址:
+  `int main(int argc, char **argv, char **envp);`
+  因为ANSI C规定main只有两个参数，而且第三个参数与全局变量environ相比也没有带来更多益处，所以POSIX.1也规定应使用environ而不使用第三个参数。 通常用getenv和putenv函数来存取特定的环境变量，而不是用environ变量。但是，如果要查看整个环境，则必须使用environ指针。
 
 ### 7.6 C程序的内存空间布局
 
