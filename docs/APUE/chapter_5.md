@@ -49,9 +49,32 @@ int setvbuf(FILE *fp, char *buf, int mode, size_t size);
   如果指定一个不带缓存的流，则忽略buf和size参数。如果指定全缓存或行缓存，则buf和size可以选择地指定一个缓存以及长度。如果该流是带缓存的，而buf是NULL, 则标准I/O库将自动地为流分配适当长度地缓存。适当长度指地是由struct结构中地成员st_blksize所指定的值。如果系统不能为该流决定此值(例如若此流涉及一个设备或一个管道)，则分配长度为BUFSIZE的缓存。
   ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/setbuf_setvbuf.png)
   
+  要了解，如果在一个函数中分配一个自动变量类的标准I/O缓存，则从该函数返回之前，必须关闭该流。另外，SVR4将缓存的一部分用于自己的管理操作，所以可以存放在缓存中的实际数据字节少于size. 一般而言，应由系统选择缓存的长度，并自动分配缓存。在这样处理时，标准I/O库在关闭此流时将自动释放此缓存。
+
+  在任何时候都可以强制刷新一个流fflush(FILE *fp); 此函数使该流所有未写的数据都被传递至内核。作为一种特殊情形，如若fp是NULL, 则此函数刷新所有输出流。
 
 ### 5.5 打开流
+  下列三个函数可用于打开一个标准I/O流
+```
+#include <stdio.h>
+FILE *fopen(const char *restrict pathname, const char *restrict type);
+FILE *freopen(const char *restrict pathname, const char *restrict type, FILE *restrict fp);
+FILE *fdopen(int fd, const char *type);
+              All three return: file pointer if OK, NULL on error
+```
+  这三个函数的区别是:
+  1. fopen打开路径名由pathname指定的一个文件
+  2. freopen在一个特定的流上(由fp指示)打开一个指定的文件(路径名由pathname指示)，如若该流已经打开，则先关闭该流。此函数一般用于将一个指定的文件打开为一个预定义的流: 标准输入流、标准输出流或标准错误流。
+  3. fdopen取一个现存的文件描述符(我们可能从open, dup, dup2, fcntl或pipe函数得到此文件描述符)，并使一个标准的I/O流与该描述符相结合。 此函数常用于由创建管道和网络通信通道函数获得的描述符。因为这些特殊类型的文件不能用标准I/O fopen函数打开，首先必须先调用设备专用函数以获得一个文件描述符，然后用fdopen使一个标准I/O流与该描述符相结合。
+  type参数指定对该I/O流的读写方式，ANSI C规定type参数可以有15种不同的值，它们分别如下:
+  * r或rb: 为读而打开
+  * w或wb: 使文件成为0长，或为写而创建
+  * a或ab: 添加；在文件尾写而打开，或为写而创建
+  * r+或r+b或rb+: 为读和写而打开
+  * w+或w+b或wb+: 使文件长度为0，或为读和写而打开
+  * a+或a+b或ab+: 为在文件末尾读和写而打开或创建。
 
+  使用字符b作为type的一部分，使得
 ### 5.6 读、写流
 
 ### 5.7 每次一行I/O
