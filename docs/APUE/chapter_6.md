@@ -47,5 +47,16 @@ pw_shell    初始shell(用户程序)
 ### 6.9 系统标识
 
 ### 6.10 时间和日期例程
+  由Unix内核提供的基本时间服务是国际标准时间公元1970年1月1日00:00:00以来经过的秒数。这种秒数数据类型time_t表示的。我们称它们为日历时间。日历时间包括时间和日期。Unix在这方面与其他操作系统的区别: 
+  * 以国际标准时间而非本地时间计时
+  * 可自动进行转换，例如变换到夏日制
+  * 将时间和日期作为一个量值保存。time函数返回当前时间和日期。
+```
+#include <time.h>
+time_t time(time_t *calptr);
+```
+  时间值作为函数值返回。如果参数非null, 则时间值也存放在由calptr指向的单元内。
+  一旦取得了这种以秒计的很大时间值后，通常要调用另一个时间函数将其变换为人们可读的时间和日期。 比如localtime, mktime, ctime, strftime都受到环境变量TZ的影响。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/times_relation.png)
 
 ### 6.11 总结
