@@ -958,11 +958,102 @@ myfunc(const char *pathname, const struct stat *statptr, int type)
 ```
 
 ### 4.23 chdir, fchdir和getcwd函数
+  每个进程都有一个当前工作目录，此目录是搜索所有相对路径名的起点。当用户登录到unix系统时，其当前工作目录通常是口令文件/etc/paswd中该用户登录项的第六个字段--用户的起始目录。 当前工作目录是进程的一个属性，起始目录则是登录名的一个属性。 进程调用chdir和fchdir函数可以更改当前工作目录。
+```
+#include <unistd.h>
+int chdir(const char *pathname);
+int fchdir(int filedes);
+```
+  这两个函数中，可以分别用pathname或打开的文件描述符来指定新的当前工作目录。
+  
+  getcwd()是获取当前工作目录的函数。
+```
+#include <unistd.h>
+char *getcwd(char *buf, size_t size);
 
+#include "apue.h"
+#include <stdio.h>
+#include <sys/types.h>
+
+int
+main(void)
+{
+    char *ptr;
+    size_t size;
+
+    if(chdir("/Users/apple") < 0)
+        err_sys("chdir failed");
+
+    ptr = path_alloc(&size);
+
+    if(getcwd(ptr, size) == NULL)
+        err_sys("getcwd failed");
+
+    printf("cwd = %s %d\n", ptr, (int)size);
+
+    exit(0);
+}
+```
+  
 ### 4.24 特殊设备文件
+  st_dev和st_rdev两个字段经常让人困惑。 后面18.9我们将使用这两个字段来实现ttyname函数。 使用它们的规则非常简单。
+  * 每个文件系统都由其主、次设备号而为人所知。设备号所用的数据类型是基本系统数据类型dev_t. 回忆图4.1， 一个磁盘经常包含若干个文件系统。
+  * 我们通常可以使用两个大多数实现都定义的宏: major和minor来存取主、次设备号。 这就意味着我们无需关心这两个数是如何存放在dev_t对象中的。
+  * 系统中每个文件名的st_dev值是文件系统的设备号，该文件系统包含了该文件名和其对应的i节点。
+  * 只有字符特殊文件和块特殊文件才有st_rdev值。 此值包含该实际设备的设备号。
+  
+```
+#include "apue.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+
+int
+main(int argc, char **argv)
+{
+    int i;
+    struct stat buf;
+
+    for(i = 1; i < argc; i++)
+    {   
+        printf("%s: ", argv[i]);
+
+        if(lstat(argv[i], &buf) < 0) {
+            err_ret("lstat error");
+            continue;
+        }   
+
+        printf("dev = %d/%d", major(buf.st_dev), minor(buf.st_dev));
+
+        if(S_ISDIR(buf.st_mode) || S_ISBLK(buf.st_mode)) {
+            printf(" (%s) rdev = %d/%d",
+                (S_ISCHR(buf.st_mode)) ? "character" : "block",
+                major(buf.st_rdev), minor(buf.st_rdev));
+        }   
+
+        printf("\n");
+    }   
+
+    exit(0);
+}
+
+```
+  
 
 ### 4.25 sync和fsync函数
+  传统unix实现在内核中设有缓冲存储器，大多数I/O都通过缓存进行。当数据写到文件上时，通常该数据先由内核复制到缓存中，如果该缓存尚未写满，则并不将其排入输出队列，而是等待其写满或者当内核需要重用该缓存以便存放其他磁盘块数据时，再将缓存排入输出队列，然后待其到达队首时，才进行实际的I/O操作。这种输出方式被称之为延迟写(delayed write). 延迟写减少了磁盘读写次数，但是却降低了文件内容的更新速度，使得预写到文件中的数据在一段时间内并没有写到磁盘上。当系统发生故障时，这种延迟可能造成文件更新内容的丢失。 为了保证磁盘上实际文件系统与缓存中内容一致性，Unix系统提供了sync, fsync两个系统调用函数。
+```
+#include <unistd.h>
+void sync(void);
+int fsync(int filedes);
+```
+  sync指示将所有修改过的块的缓存排入写队列，然后就返回，它并不等待实际I/O操作结束。
+  系统精灵程序(通常称为update)一般每隔30秒调用一次sync函数。这就保证了定期刷新内核的块缓存。 命令sync(1)也调用sync函数。
+  
+  函数fsync值引用单个文件(由文件描述符filedes指定)，它等待I/O结束，然后返回。fsync可用于数据库这样的应用程序，它确保修改过的块立即写到磁盘上。比较一下fsync和O_SYNC标志。 当调用fsync时，它更新文件的内容，而对于O_SYNC，则每次对文件调用write函数时就更新文件的内容。
 
 ### 4.26 文件存取许可权位小节
+  我们已经说明了额所有文件存取许可权位，其中某些位有多种用途。下面的表列出了所有这些许可权位，以及它们对普通文件和目录的作用。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/file_prev_bits.png)
+
 
 ### 4.27 小节
