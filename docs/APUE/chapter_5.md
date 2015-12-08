@@ -47,7 +47,7 @@ int setvbuf(FILE *fp, char *buf, int mode, size_t size);
   * _IONBF 不带缓存
   
   如果指定一个不带缓存的流，则忽略buf和size参数。如果指定全缓存或行缓存，则buf和size可以选择地指定一个缓存以及长度。如果该流是带缓存的，而buf是NULL, 则标准I/O库将自动地为流分配适当长度地缓存。适当长度指地是由struct结构中地成员st_blksize所指定的值。如果系统不能为该流决定此值(例如若此流涉及一个设备或一个管道)，则分配长度为BUFSIZE的缓存。
-  ![](https://github.com/walkerqiao/walkman/tree/master/images/APUE/setbuf_setvbuf.png)
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/setbuf_setvbuf.png)
   
 
 ### 5.5 打开流
