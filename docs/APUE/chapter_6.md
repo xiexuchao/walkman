@@ -104,4 +104,35 @@ size_t strftime(char *buf, size_t maxsize, const char *format, const struct tm *
   format参数控制时间的格式。如同printf函数一样，变换说明的形式是%之后跟一个特定字符。 format的其他字符则按原样输出。两个连续的百分号在输出中产生一个百分号，与printf不同之处是，每个变化说明产生一个鼎昌输出字符串，在format字符串中没有字段宽度修饰符。 
   ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/strftime.png)
   
+```
+#include "apue.h"
+
+#include <time.h>
+#define TIME_STR_BUFF_SIZE 26
+
+int
+main(void)
+{
+    time_t tnow;
+    time(&tnow);
+
+    printf("now time string length is: %ld, and content is: %s" 
+        , strlen(ctime(&tnow))
+        , ctime(&tnow)
+    );  
+
+    struct tm *tmnow;
+    tmnow = localtime(&tnow);
+
+    printf("now time string length is: %ld, and content is: %s" 
+        , strlen(asctime(tmnow))
+        , asctime(tmnow)
+    );  
+
+    char buf[TIME_STR_BUFF_SIZE];
+    strftime(buf, TIME_STR_BUFF_SIZE, "%a %b %d %Y", tmnow);
+    printf("strftime tnow is: %s\n", buf);
+}
+```
+  
 ### 6.11 总结
