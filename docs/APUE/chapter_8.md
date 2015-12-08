@@ -38,7 +38,65 @@ pid_t fork(void);
   子进程和父进程继续执行fork之后的指令。子进程是父进程的复制品。例如，子进程获得父进程数据空间、堆和栈的复制品。注意，这是子进程所拥有的拷贝。父子进程并不共享这些存储空间部分。如果正文段是只读的，则父子进程共享正文段。
   
   现在很多实现并不做一个父进程数据段和堆的完全拷贝，因为在fork之后经常跟随着exec。作为替代，使用了在写时复制(Copy-On-Write, COW)的技术。这些区域由父子进程共享，而且内核将它们的存取许可权改变为只读的。如果有进程试图修改这些区域，则内核为有关部分，典型的是虚存系统中的页， 做一个拷贝。
+```
+#include "apue.h"
 
+#include <sys/types.h>
+
+int glob = 6;       /** external variable in initialized data **/
+char buf[] = "a write to stdout\n";
+
+int
+main(void)
+{
+    int var; /** automatic variable on the stack **/
+    pid_t pid;
+
+
+    var = 88; 
+    if(write(STDOUT_FILENO, buf, sizeof(buf) - 1) != sizeof(buf) - 1)
+        err_sys("write error");
+
+    printf("before fork\n");     /** we don't flush stdout **/
+    if((pid = fork()) < 0)
+        err_sys("fork error");
+    else if(pid == 0) { /** child process **/
+        glob++;         /** modify variables **/
+        var++;
+    } else {
+        sleep(2);
+    }   
+
+    printf("pid = %d, glob = %d, var = %d\n", getpid(), glob, var);
+    exit(0);
+}
+```
+  编译并运行结果如下:
+```
+bogon:process apple$ ./proc1 
+a write to stdout
+before fork
+pid = 77066, glob = 7, var = 89
+pid = 77065, glob = 6, var = 88
+bogon:process apple$ ./proc1 > temp.txt
+bogon:process apple$ cat temp.txt
+a write to stdout
+before fork
+pid = 77069, glob = 7, var = 89
+before fork
+pid = 77068, glob = 6, var = 88
+```
+  一般来说，在fork之后是父进程先执行还是子进程先执行是不确定的。这取决于内核所使用的调度算法。如果要求父子进程之间相互同步，则要求某种形式的进程间通信。上面程序中，父进程使自己休眠2秒钟，以使子进程先执行。但并不保证2秒钟已经足够，在后面8.8节说明竞争条件时，还将谈及这一问题及其他类型的同步方法。在10.6节中，在fork之后将用信号使父子进程同步。
+  注意，上面程序中的fork与I/O函数之间的关系。回忆第三章中所述，write函数是不带缓存的。因为在fork之前调用write, 所以其数据洗到标准输出一次。但是，标准I/O库是带缓存的。当以交互方式运行该程序时，只得到printf输出行一次，其原因是标准输出缓存由新行符刷新。但是当标准输出重定向到一个文件时，该行数据仍在缓存中，然后在父进程数据空间复制到子进程的过程中时，该缓存数据也被复制到子进程中。于是那时父子进程各自有了带该行内容的缓存。在exit之前的第二个print将其数据添加到现存的缓存中。当每个进程终止时，其缓存中的内容被写到相应的文件中。
+  
+  文件共享，对上面程序需要注意的另一点是: 在重定向父进程的标准输出时，子进程的标准输出也被重定向。实际上，fork的一个特性是所有由父进程打开的描述符都被复制到子进程中。父子进程每个相同的打开描述符共享一个文件表项。
+  
+  考虑下述情况，一个进程打开了三个不同文件，它们分别是:标准输入、标准输出和标准出错，在从fork返回时，我们有了如图8-1中所示的安排。
+  这种共享文件的方式使父子进程对同一个文件使用了一个文件位移量。考虑下述情况:一个进程fork了一个子进程，然后等待子进程终止。假定，作为普通处理的一部分，父子进程都向标准输出执行写操作。如果父进程使其标准输出重定向(很可能是由shell实现的)，那么子进程写到该标准输出时，它将更新与父进程共享的该文件的位移量。在我们所考虑的例子中，当父进程等待子进程时，子进程写到标准输出；而在子进程终止后，父进程也写到标准输出上，并且直到其输出会添加在子进程缩写数据之后。如果父子进程不共享同一文件位移量，这种形式的交互就很难实现。
+  
+  
+  
+  
 ### 8.4 vfork函数
 
 ### 8.5 exit函数
