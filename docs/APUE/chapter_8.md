@@ -247,6 +247,104 @@ pid_t waitpid(pid_t pid, int *statloc, int options);
   * WIFSIGNALED(status): 若为异常终止子进程返回的状态，则为真(接到一个不捕捉的信号)。对于这中情况可执行WTERMSIG(status)取得子进程终止的信号编号。另外SVR4和4.3+BSD(但是，非POSIX.1)定义宏:WCOREDUMP(status)，若已产生终止进程的core文件，则它返回真。
   * WIFSTOPPED(status): 若为当前暂停子进程的返回状态，则为真。对于这种情况，可执行WSTOPSIG(status)取使子进程暂停的信号编号。
 
+
+```
+/** prexit.c **/
+#include "apue.h"
+#include "prexit.h"
+
+void
+pr_exit(int status)
+{
+    if (WIFEXITED(status))
+        printf("normal termination, exit status = %d\n",
+                WEXITSTATUS(status));
+    else if (WIFSIGNALED(status))
+        printf("abnormal termination, signal number = %d%s\n",
+                WTERMSIG(status),
+#ifdef    WCOREDUMP
+                WCOREDUMP(status) ? " (core file generated)" : "");
+#else
+                "");
+#endif
+    else if (WIFSTOPPED(status))
+        printf("child stopped, signal number = %d\n",
+                WSTOPSIG(status));
+}
+
+/** pstatus.c **/
+#include <sys/types.h>
+#include <sys/wait.h>
+
+#include "apue.h"
+
+int
+main(void)
+{
+    pid_t pid;
+    int status;
+
+    if((pid = fork()) < 0)
+        err_sys("fork error");
+    else if(pid == 0) /** child process **/
+        exit(7);
+
+    if(wait(&status) != pid) /** wait for child **/
+        err_sys("wait error");
+    pr_exit(status);
+
+
+    if((pid = fork()) < 0)
+        err_sys("fork error");
+    else if(pid == 0) /** child process **/
+        abort();     /** generate SIGABRT **/
+
+
+    if(wait(&status) != pid)
+        err_sys("wait error");
+    pr_exit(status);
+
+    if((pid = fork()) < 0)
+        err_sys("fork error");
+    else if(pid == 0) /** child process **/
+        status /= 0;     /** divide by 0 generate SIGFPE **/
+
+    if(wait(&status) != pid) /** wait for child **/
+        err_sys("wait error");
+    pr_exit(status);
+
+    exit(0);
+}
+```
+  编译并运行结果如下:
+```
+bogon:process apple$ ./pstatus 
+normal termination, exit status = 7
+abnormal termination, signal number = 6
+abnormal termination, signal number = 8
+```
+  不幸的是，没有一种可移植的方法将WTERMSIG得到的信号编号映射为说明性的名字。我们必须查看<signal.h>头文件才能直到SIGABRT的值是6，SIGFPE的值是8.
+  正如前面所述，如果一个进程有几个子进程，那么只要有一个子进程终止，wait就返回。如果要等待一个指定的进程终止(如果直到要等待的进程的ID),那么该如何做呢? 在早期的Unix版本中，必须调用wait, 然后将其返回的进程ID和所要期望的进程ID进行比较。如果终止进程不是所期望的，则将该进程ID和终止状态保存起来，然后再次调用wait. 反复这样做直到所期望的进程终止。下一次又想等待一个特定进程时，先查看已终止的进程表，若其中已有要等待的进程，则取有关信息，否则调用wait. 其实，我们需要的是等待一个特定进程的函数。POSIX.1定义了waitpid函数以提取这种功能(以及其他的一些功能)。
+  
+  对于waitpid的pid参数的解释与其值有关:
+  * pid == -1: 等待任一子进程。于是在这一方面waitpid与wait等效。
+  * pid > 0: 等待其进程ID与pid相等的子进程。
+  * pid == 0: 等待其组ID等于调用进程组ID的任一子进程。
+  * pid < -1: 等待其组ID等于pid的绝对值的任一子进程。
+  
+  waitpid返回终止子进程的进程ID, 而该子进程的终止状态则通过statloc返回。 对于wait， 其唯一的出错是调用进程没有子进程(函数调用被一个信号中断时，也可能返回另一种出错。第10章进行讨论。)但是对于waitpid, 如果指定的进程或进程组不存在，或者调用进程没有子进程都能出错。
+
+  options参数使我们能进一步控制waitpid的操作。此参数或者是0，或者是表8-2中常数的逐位或运算。
+  * WNOHANG: 若由pid指定的子进程并不立即可用，则waitpid不阻塞，此时其返回值为0.
+  * WUNTRACED: 若某实现支持作业控制，则由pid指定的任一进程状态已暂停，且其状态自暂停以来还未报告过，则返回其状态。WIFSTOPPED宏确定返回值是否对应一个暂停子进程。
+```
+SVR4支持两个附加的非标准的options常数。WNOWAIT使系统将其终止状态已由waitpid返回的进程保持在等待状态，于是该进程
+就可被再次等待。对于WCONTINUED， 返回由pid指定的某一子进程的状态，该子进程已被继续，其状态尚未报告过。
+```
+  waitpid函数提供了wait函数没有提供的三个功能:
+  1. waitpid等待一个特定的进程(而wait则返回任一终止子进程的状态)。在谈论popen函数时会再说明这一功能。
+  2. waitpid提供了一个wait的非阻塞版本。有时希望取得一个子进程的状态，但不想阻塞。
+  3. waitpid支持作业控制(以WUNTRACED选择项)
   
 
 ### 8.7 waitid函数
