@@ -649,11 +649,139 @@ int setgid(gid_t gid);
 ### 8.13 system函数
 
 ### 8.14 进程会计
+  很多Unix系统提供了一个选择项以进行进程会计事务处理。当取了这种选择项后，每当进程结束时内核就写一个会计记录。典型的会计记录是32字节常的二进制数据，包括命令名、所用CPU时间总量、用户ID和组ID、启动时间等。本节将比较详细地说明这种会计记录，这样也使得我们得到了一个再次观察进程的机会，得到了使用5.9节中所介绍的fread函数的机会。
+  一个至今没有说明过的函数acct启动和终止进程会计。唯一使用这一函数的是SVR4和4.3+BSD的accton(8)命令。超级用户执行一个带路径名参数的accton命令会启动会计处理。该路径名通常是/var/adm/pacct. 执行不带任何参数的accton命令则会停止会计处理。
+  
+  会计记录结构定义在头文件<sys/acct.h>中，其样式如下:
+```
+typedef u_short comp_t; /** 3-bit base 8 exponent; 13-bit fraction **/
+struct acct
+{
+  char ac_flag; /** flag **/
+  char ac_stat; /** 终止状态(仅做信号&core标志) **/
+  uid_t ac_uid; /** real user id **/
+  gid_t ac_gid; /** real group id **/
+  dev_t ac_tty; /** controlling terminal **/
+  time_t ac_btime; /** starting calendar time **/
+  comp_t ac_utime; /** 用户CPU时间(clock ticks) **/
+  comp_t ac_stime; /** 系统CPU时间(clock ticks) **/
+  comp_t ac_etime; /** elapsed time(clock ticks) **/
+  comp_t ac_mem; /** 平均内存使用 **/
+  comp_t ac_io; /** 传输字节(通过读写) **/
+  comp_t ac_rw; /** 读写的块数 **/
+  char ac_comm[8]; /** command name: [8] for SVR4, [10] for 4.3+BSD **/
+}
+```
+  其中,ac_flag记录了进程执行期间的某些事件。这些事件见下表:
+  * AFORK: 进程是由fork产生的，但从未调用exec.
+  * ASU: 进程使用超级用户优先权
+  * ACOMPAT: 进程使用兼容方式(仅VAX)
+  * ACORE: 进程转储core(不在SVR4)
+  * AXSIG: 进程由信号消灭(不在SVR4)
+  会计记录所需的各个数据(各CPU时间、传输字符数等)都由内核保存在进程表中。并在一个新进程被创建时设置初值(例如在fork之后在子进程中)。进程终止时写一个会计记录。这就意味着在会计文件中记录的顺序对应于进程终止的顺序，而不是它们启动的顺序。为了确定启动顺序，需要读全部会计文件，并按启动日历时间进行排序。这不是一种很完善的方法，因为日历时间的单位是秒，在一个给定的秒中可能启动了多个进程。而墙上时钟时间的单位是时钟嘀嗒(通常，每秒嘀嗒数在50～100之间)。但是我们并不知道进程的终止时间，所知道的指示启动时间和终止顺序。这就意味着，即使墙上时间比起动时间精确的多，但是仍不能按照会计文件中的数量重构各进程的精确启动顺序。
+
+  会计记录对应于进程而不是程序。在fork之后，内核为子进程初始化一个记录，而不是在一个新程序被执行。虽然exec并不创建一个新的会计记录，但相应记录中命令名改变了，AFORK标志则被清除。这就意味着，如果一个进程顺序执行了三个程序A exec B, B exec C,最后C exit,但只写一个会计记录。在该记录中命令名对应于程序C,但CPU时间是程序A,B,C之和。
+  
+  
 
 ### 8.15 用户标识符
 
 ### 8.16 进程调度
 
 ### 8.17 进程时间
+  在1.10节中说明了墙上时钟时间、用户CPU时间和系统CPU时间。任一进程都可调用times函数以获得它自己以及终止子进程的上述值。
+```
+#include <sys/times.h>
+clock_t times(struct tms *buf);
+```
+  此函数填写由buf指向的tms结构，该结构定义如下:
+```
+struct tms{
+  clock_t tms_utime; /** user CPU time **/
+  clock_t tms_stime; /** system CPU time **/
+  clock_t tms_cutime; /** user CPU time, terminated children **/
+  clock_t tms_cstime; /** system CPU time, terminated children **/
+}
+```
+  注意，此结构没有包含墙上时钟时间。作为替代，times函数返回墙上时钟时间作为函数值。此值是相对于过去的某一时刻度量的，所以不能用其绝对值而必须使用其相对值。例如，调用times, 保存其返回值。在以后某个时间再次调用times， 从新返回值中减去以前返回的值，此差值就是墙上时钟时间。(在一个长期运行的继承可能其墙上时钟时间会溢出，当然这种可能性极小)
+  
+  结构中两个针对子进程的字段包含了此进程已等待到的各子进程的值。
+  
+  所有由此函数返回的clock_t值都用_SC_CLK_TCK变换成秒数。
+```
+#include <sys/times.h>
+#include "apue.h"
+
+static void pr_times(clock_t, struct tms *, struct tms *);
+static void do_cmd(char *);
+
+int
+main(int argc, char **argv)
+{
+    int i;
+    for(i = 1; i < argc; i++)
+    {   
+        do_cmd(argv[i]); /** once for each command-line arg **/
+    }   
+
+    exit(0);
+}
+
+static void
+do_cmd(char *cmd)
+{
+    struct tms tmsstart, tmsend;
+    clock_t start, end;
+    int status;
+
+    fprintf(stderr, "\ncommand: %s\n", cmd);
+
+    if((start = times(&tmsstart)) == -1) /** starting values **/
+        err_sys("times error");
+
+    if((status = system(cmd)) < 0)
+        err_sys("system() error");
+
+    if((end = times(&tmsend)) == -1) 
+        err_sys("times error");
+
+    pr_times(end - start, &tmsstart, &tmsend);
+    pr_exit(status);
+}
+
+static void
+pr_times(clock_t real, struct tms *tmsstart, struct tms *tmsend)
+{
+    static long clktck = 0;
+    if(clktck == 0)
+        if((clktck = sysconf(_SC_CLK_TCK)) < 0)
+            err_sys("sysconf error");
+
+    fprintf(stderr, " real: %7.2f\n", real / (double) clktck);
+    fprintf(stderr, " user: %7.2f\n",
+        (tmsend->tms_utime - tmsstart->tms_utime) / (double) clktck);
+    fprintf(stderr, " sys: %7.2f\n",
+        (tmsend->tms_stime - tmsstart->tms_stime) / (double) clktck);
+    fprintf(stderr, " child user: %7.2f\n",
+        (tmsend->tms_cutime - tmsstart->tms_cutime) / (double) clktck);
+    fprintf(stderr, " child sys: %7.2f\n",
+        (tmsend->tms_cstime - tmsstart->tms_cstime) / (double) clktck);
+}
+```
+  编译并运行结果如下:
+```
+bogon:process apple$ ./ptimes "cd /usr/include; grep _POSIX_SOURCE */*.h > /dev/null"
+
+command: cd /usr/include; grep _POSIX_SOURCE */*.h > /dev/null
+ real:    0.64
+ user:    0.00
+ sys:    0.00
+ child user:    0.22
+ child sys:    0.20
+normal termination, exit status = 0
+```
 
 ### 8.18 总结
+  对在Unix环境中的高级程序设计而言，完整地了解Unix的进程控制非常重要。其中必须数量掌握的只有几个--fork, exec族，_exit，wait和waitpid. 很多应用程序都使用这些原语。fork原语也给了我们一个了解竞态条件的机会。
+  
+  
