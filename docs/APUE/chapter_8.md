@@ -346,14 +346,240 @@ SVR4支持两个附加的非标准的options常数。WNOWAIT使系统将其终�
   2. waitpid提供了一个wait的非阻塞版本。有时希望取得一个子进程的状态，但不想阻塞。
   3. waitpid支持作业控制(以WUNTRACED选择项)
   
+  实例:
+  回忆下8.5节中关于僵死进程的讨论。如果一个进程要fork一个子进程，但不要求它等待子进程终止，也不希望子进程处于僵死状态直到父进程终止，实现这一点要求的诀窍是调用fork两次. 下面程序实现了这点。
+  在第二个子进程中调用sleep以保证在打印父进程ID时第一个子进程已经终止。在fork之后，父子进程都可以继续执行--我们无法预知哪一个会先执行。如果不使第二个子进程睡眠，则在fork之后，它可能比其父进程先执行，于是它打印的父进程ID将是创建它的父进程，而不是init进程(进程ID 1).
+```
+#include <sys/types.h>
+#include <sys/wait.h>
+
+#include "apue.h"
+
+int
+main(void)
+{
+    pid_t pid;
+
+    if((pid = fork()) < 0)
+        err_sys("fork error");
+
+    else if(pid == 0) {
+        if((pid = fork()) < 0)
+            err_sys("fork error");
+        else if(pid > 0)
+            exit(0);
+        sleep(2);
+        printf("second child, parent pid = %d\n", getppid());
+        exit(0);
+    }   
+
+    if(waitpid(pid, NULL, 0) != pid)
+        err_sys("waitpid error");
+
+    exit(0);
+}
+```
+  编译运行，执行结果如下:
+```
+bogon:process apple$ ./nozombie 
+bogon:process apple$ second child, parent pid = 1
+```
+  注意，当原先的进程(也就是exec本程序的进程)终止时，shell打印其提示符，这在第二个子进程打印其父进程ID之前。
+  
+  
 
 ### 8.7 waitid函数
+  这个单独的Unix规范包含一个额外的函数来检索进程退出状态。waitid函数类似于waitpid函数，但是提供了额外的灵活性。
+```
+#include <sys/wait.h>
+int waitid(idtype_t idtype, id_t, siginfo_t *infop, int options);
+  return: 0 if OK, -1 on error
+```
+  和waitpid类似，waitid允许进程指定要wait的是哪个子进程。它不是使用单个参数将进程ID和进程组ID编码在一个信息中，而是采用了两个参数。id参数是基于idtype解释的。 支持的idtype有如下几种:
+  * P_PID: wait特定的进程id, 包含要wait的子进程的进程ID
+  * P_PGID: wait特定进程组的任意子进程: id包含要wait的子进程的进程组ID
+  * P_ALL: wait任意子进程: id参数被忽略掉。
+  
+  options参数是下列标志的位或结果。这些标志表明调用者感兴趣哪些状态改变。
+  * WCONTINUED: 等待之前已经stopped并已经继续的进程，并且这些状态还没有报告过。
+  * WEXITED: wait哪些已经exited的进程
+  * WNOHANG: 如果没有子进程exit状态改变可用，立即返回，而不是阻塞。
+  * WSTOPPED: wait已经stopped的进程，并且这些进程状态还没有报告过。
+  
+  至少需要在options参数里边提供WCONTINUED, WEXITED或WSTOPPED。
+  infop参数是一个指向siginfo的结构。 这个结构包含关于信号产生导致子进程状态改变的详细信息。siginfo结构会在后面10.14中介绍。
 
 ### 8.8 wait3和wait4函数
+  大多数Unix系统实现提供了另外两个函数:wait3, wait4. 由于历史原因，这两个变体是从BSD分支派生过来。这两个函数提供的功能比POSIX.1函数wait和waitpid所提供的分别要多一个，这与附加参数rusage有关。该参数要求内核返回由终止进程及其所有子进程使用的资源摘要。
+```
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+
+pid_t wait3(int *statloc, int options, struct rusage *rusage);
+pid_t wait4(pid_t pid, int *statloc, int options, struct rusage *rusage);
+```
+  资源信息包括用户CPU时间总量、系统CPU时间总量、缺页次数、接收到信号的次数等。有关细节可以参阅getrusage(2)手册页。这些资源信息只包括终止子进程，并不包括处于停止状态的子进程。
 
 ### 8.9 竞态条件
+  从本书的目的除法，当多个进程都企图对共享数据进行某种处理，而最后的结果又取决于进程运行的顺序时，则我们认为这发生了竞态条件(race condition). 如果在fork之后的某种逻辑显示或隐式地依赖于在fork之后是父进程线运行还是子进程先运行，那么fork函数就会是竞态条件活跃地孽生地。 通常，我们不能预料哪个进程先运行。即使知道哪一个进程先运行，那么在该进程开始运行之后，所发生的事情也依赖于系统负载以及内核的调度算法。
+  
+  在程序8.5中，当第二个子进程打印其父进程进程id时，我们看到了一个潜在的竞态条件。如果第二个子进程在第一个子进程之前运行，则其父进程将会是第一个子进程。但是，如果第一个子进程先运行，并有足够的时间到达并执行exit,则第二个子进程的父进程就是init。 即使在程序中调用sleep， 这也不保证什么。如果系统负载很重，那么在第二个子进程从sleep返回时，可能第一个子进程还没有得到机会运行。这种形式的问题很难排除，因为在大部分时间，这种问题并不出现。
+  如果一个进程希望等待一个子进程终止，则它必须调用wait函数。如果一个进程要等待其他父进程终止，则可以使用下列形式的循环:
+```
+while(getppid() != 1)
+  sleep(1);
+```
+  这种形式的循环(称为定期询问polling)的问题是它浪费了CPU时间，因为调用者每隔1秒都被唤醒，然后进行条件测试。
+  为了避免竞态条件和定期询问，在多个进程之间需要有某种形式的信号机制。在Unix中可以使用信号机制，在10.16节将说明它的一种用法。各种形式的进程间通信(IPC)也可使用。
+  在父子进程的关系中，常常出现下述情况。在fork之后，父子进程都有一些事情要做。例如，父进程可能以子进程ID更新日志文件中的一个记录，而子进程则可能要为父进程创建一个文件。在本例中，要求每个进程在执行完它的一套初始化操作后要通知对方，并且在继续运行之前，要等待另一方面完成其初始化操作。这种情况可以描述如下:
+```
+#include "apue.h"
+TELL_WAIT(); /** set things up for TELL_xxx & WAIT_xxx **/
+
+if((pid = fork()) < 0)
+  err_sys("fork error");
+else if (pid == 0) { /** child **/
+  /** child does whatever is necessary ... **/
+  TELL_PARENT(getppid()); /** tell parent we're done **/
+  WAIT_PARENT(); /** and wait for parent **/
+  
+  /** and the child continues on its way ... **/
+  exit(0);
+}
+
+/** parent does whatever is neccessary ... **/
+TELL_CHILD(pid);            /** tell child we're done **/
+WAIT_CHILD();       /** and wait for child **/
+
+/** and the parent continues on its way ... **/
+
+exit(0);
+```
+
+  假设在头文件apue.h中定义了各个需要使用的变量。五个例程TELL_WAIT、TELL_PARENT、TELL_CHILD、WAIT_PARENT以及WAIT_CHILD，可以是宏，也可以是函数。
+  
+  在后面一些章节中，会说明实现这些TELL和WAIT例程的不同方法:10.16节中说明用信号的一种实现，程序14-3中说明用流管道的一种实现。下面先看一个使用这五个例程的实例。
+```
+#include <sys/types.h>
+#include "apue.h"
+
+static void charatatime(char *); 
+
+int
+main(void)
+{
+    pid_t pid;
+    if((pid = fork()) < 0)
+        err_sys("fork error");
+    else if(pid == 0) {
+        charatatime("output from child\n");
+    } else {
+        charatatime("output from parent\n");
+    }   
+    exit(0);
+}
+
+static void charatatime(char *str)
+{
+    char *ptr;
+    int c;
+
+    setbuf(stdout, NULL);    /* set unbuffered */
+    for(ptr = str; c = *(ptr++); )
+        putc(c, stdout);
+}
+```
+  在程序中将标准输出设置为不带缓冲的，于是每个字符输出都需要调用一次write. 本例的目的是为了使内核尽可能多次地在两个进程之间进行切换，以例示静态条件。(如果不这样做，可能也就绝不会出现下面所示地输出。没有看到具有错误地输出并不意味着没有静态条件，这只是意味着在此特定地系统上未能见到它)。 我在macbook上看不到父子进程交错输出单个字符地情况，输出就略过了。
+  
+  修改程序8-6，使其使用TELL和WAIT函数，于是就形成了8-7.
+  
+```
+#include <sys/types.h>
+#include "apue.h"
+
+static void charatatime(char *); 
+
+int
+main(void)
+{
+    pid_t pid;
+    TELL_WAIT();
+
+    if((pid = fork()) < 0)
+        err_sys("fork error");
+    else if(pid == 0) {
+        WAIT_PARENT();
+        charatatime("output from child\n");
+    } else {
+        charatatime("output from parent\n");
+        TELL_CHILD(pid);
+    }   
+    exit(0);
+}
+
+static void charatatime(char *str)
+{
+    char *ptr;
+    int c;
+
+    setbuf(stdout, NULL);    /* set unbuffered */
+    for(ptr = str; c = *(ptr++); )
+        putc(c, stdout);
+}
+```
+  关于此例后面再讨论。
+  
+  
 
 ### 8.10 exec函数
+  8.3中曾提到fork函数创建子进程后，子进程往往会调用一种exec函数以执行另一个程序。当进程调用一种exec函数时，该进程完全由新进程代换，而新程序从其main开始执行。因为调用exec并不创建新进程，所以前后地进程ID并未改变。exec指示用另一个新程序替换了当前进程地正文、数据、堆和栈段。
+  
+  有六种不同地exec函数可供使用，它们常常被称为exec函数。这些exec函数都是Unix进程控制原语。用fork可以创建新进程，用exec可以执行新的程序。exit函数和两个wait函数处理终止和等待终止。 这些是我们需要的基本进程控制原语。在后面各节中将使用这些源于构造另外一些如popen和system之类的函数。
+  
+```
+#include <unistd.h>
+int execl(const char *pathname, const char *arg0, ... /* (char *)0 */ );
+int execv(const char *pathname, char *const argv[]);
+int execle(const char *pathname, const char *arg0, ... /* (char *)0, char *const envp[] */ );
+int execve(const char *pathname, char *const argv[], char *const envp[]); 
+int execlp(const char *filename, const char *arg0, ... /* (char *)0 */ ); 
+int execvp(const char *filename, char *const argv[]);
+int fexecve(int fd, char *const argv[], char *const envp[]);
+                  All seven return: −1 on error, no return on success
+```
+  这些函数之前的第一个区别是前四个取路径名作为参数，接着两个则取文件名作为参数。当指定filename作为参数时:
+  * 如果filename中包含/，则就将其视为路径名。
+  * 否则就按PATH环境变量，在有关目录中搜索可执行文件。
+  
+  如果execlp和execvp中的任意一个使用路径前缀找到了一个可执行文件，但是该文件不是由连接编辑程序产生的机器可执行程序代码文件， 则就认为该文件是一个shell脚本，于是试着调用/bin/sh， 并以该filename作为shell的输入。
+
+  第二个区别是参数表的传递有关(l表示列表(list), v表示矢量(vector). 函数execl和execlp和execle要求将新程序的每个命令行参数都说明为一个单独的参数。这种参数以空指针结尾。对另外三个函数(execv, execvp和execve)， 则应先构造一个指向各参数的指针数组，然后将该数组地址作为这三个函数的参数。
+  
+  最后一个区别就是，带e的，可以传递一个指向环境字符串指针数组的指针。
+  
+  具体的就不详细介绍， 前面有一篇关于exec的文章，可参照前面文章。
+  
+  
+  前面曾提到在执行exec后，进程ID没有发生改变。除此之外，执行新程序的进程还保持了原进程的如下特征:
+  * 进程ID和父进程ID
+  * 实际用户ID和实际组ID
+  * 添加组ID
+  * 进程组ID
+  * 对话期ID
+  * 控制终端
+  * 闹钟尚余留的时间
+  * 当前工作目录
+  * 根目录
+  * 文件方式创建屏蔽字
+  * 文件锁
+  * 进程信号屏蔽
+  * 未决信号
+  * 资源限制
+  * tms_utime, tms_stime, tms_cutime和tms_ustime值。
+  
+  对打开文件的处理与每隔描述符的exec关闭标志值有关。
 
 ### 8.11 改变用户ID和组ID
 
