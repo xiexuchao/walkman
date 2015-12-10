@@ -579,9 +579,70 @@ int fexecve(int fd, char *const argv[], char *const envp[]);
   * 资源限制
   * tms_utime, tms_stime, tms_cutime和tms_ustime值。
   
-  对打开文件的处理与每隔描述符的exec关闭标志值有关。
+  对打开文件的处理与每个描述符的exec关闭标志值有关。进程中每个打开的描述符都有一个exec关闭标志。若此标志设置，则在执行exec时关闭该文件描述符，否则该描述符仍打开。除非特地用fcntl设置了该标志，否则系统的默认操作是在exec后仍保持这种描述符打开。
+
+  POSIX.1明确要求在exec时关闭打开目录流。这通常是由opendir函数实现的，它调用fcntl函数为对应于打开目录流的描述符设置exec关闭标志。
+  
+  注意，在exec前后实际用户ID和实际组ID保持不变，而有效ID是否改变则取决于所执行程序的文件的set-user-ID和set-group-ID位是否设置。如果新程序的set-user-ID已设置，则有效用户ID变成程序文件的所有者的ID, 否则有效用户ID不变。对组ID的处理方式与此相同。
+  
+  很多Unix实现中，这六个函数中有一个execve是系统内核的系统调用。另外5个是库函数，它们最终都要调用系统调用。者六个函数的关系如下。 在这种安排中，库函数execlp和execvp使用PATH环境变量查找第一个包含名为filename的可执行文件的路径名前缀。
+  
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/execs_relations.png)
+```
+#include <sys/types.h>
+#include <sys/wait.h>
+
+#include "apue.h"
+
+char *env_init[] = {"USER=unknow", "PATH=/tmp", NULL};
+int
+main(void)
+{
+    pid_t pid;
+    if((pid = fork()) < 0)
+        err_sys("fork error");
+    else if(pid == 0) {
+        if(execle("/bin/ls", "ls", "-la", (char *)0, env_init) < 0)
+            err_sys("execle error");
+    }   
+
+    if(waitpid(pid, NULL, 0) < 0)
+        err_sys("wait error");
+
+    if((pid = fork()) < 0)
+        err_sys("fork error");
+    else if(pid == 0) {
+        if(execlp("ls", "ls", "-la", (char *)0) < 0)
+            err_sys("execlp error");
+    }   
+
+    exit(0);
+}
+```
+  在该程序中，先调用execle, 他要求一个路径名和一个特定的环境。下一个调用的是execlp他用一个文件名，并将调用者的环境传给新程序。execlp在这里我们能够工作的原因是因为目录/bin是PATH的一部分。注意，我们将第一个参数设置为路径名的文件名分量。某些shell将此参数设置为完整的路径名。
+  
+  
 
 ### 8.11 改变用户ID和组ID
+  可以用setudi函数设置实际用户ID和有效用户ID. 与此类似，可以用setgid函数设置实际组ID和有效组ID.
+```
+#include <sys/types.h>
+#include <unistd.h>
+
+int setuid(uid_t uid);
+int setgid(gid_t gid);
+```
+  关于谁能更改ID有若干规则。现在先考虑有关改变用户ID的规则(在这里关于用户ID所说明的一切都适用于组ID).
+  1. 若进程具有超级用户特权，则setuid函数将实际用户ID、有效用户ID、以及保存的set-user-ID设置为uid.
+  2. 若进程没有超级用户特权，但是uid等于实际用户ID或保存的set-user-ID, 则setuid直降有效用户ID设置为uid.不改变实际用户ID和保存的set-user-ID.
+  3. 如果上述两个条件都不成立，则errno设置为EPERM, 并返回出错。
+  在这里假定_POSIX_SAVED_IDS为真。如果没有提供这种功能，则上面所说的关于保存的set-user-ID部分都无效。
+
+  关于内核所维护的三个用户ID,还需要注意下列几点:
+  1. 只有超级用户进程可以更改实际用户ID. 通常，实际用户ID是在用户登录时，由login(1)程序设定的，而且决不会改变它。因为login是一个超级用户进程，当它调用setuid时，设置所有三个用户ID.
+  2. 仅当对程序文件设置了set-user-ID位时，exec函数设置有效用户ID. 如果set-user-ID位没有设置，则exec函数不会改变有效用户ID，则将其维持为原先值。任何时候都可以调用setuid，将有效用户ID设置为实际用户ID或保存的set-user-ID. 自然，不能将有效用户ID设置为任一随机值。
+  3. 保存的set-user-ID是由exec从有效用户ID复制的。在exec按文件用户ID设置了有效用户ID后，即进行这种复制，并将此副本保存起来。
+  
 
 ### 8.12 解释器文件
 
