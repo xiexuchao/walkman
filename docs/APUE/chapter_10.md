@@ -95,10 +95,116 @@ Sigfunc *signal(int, Sigfunc *);
 ```
   这三个常数可用于表示指向函数的指针，该函数要一个整型参数，而且无返回值。signal的第二个参数以及其返回值就可以用它们表示。这些常数所使用的三个值不一定要是-1, 0和1. 它们必须是三个值而绝不能是任一可说明函数的地址。大多数Unix系统使用上面所示的值。
   
-  
-  
-### 10.4 不可信信号
+```
+include <signal.h>
+#include "apue.h"
 
+static void sig_usr(int); /** one handler for both signals **/
+
+int
+main(void)
+{
+    if(signal(SIGUSR1, sig_usr) == SIG_ERR)
+        err_sys("signal error");
+    if(signal(SIGUSR2, sig_usr) == SIG_ERR)
+        err_sys("signal error");
+
+    for(;;)
+        pause();
+}
+
+static void
+sig_usr(int signo)
+{
+    if(signo == SIGUSR1)
+        printf("recevied SIGUSR1\n");
+
+    else if(signo == SIGUSR2)
+        printf("received SIGUSR2\n");
+    else
+        err_dump("received signal %d\n", signo);
+    return;
+}
+```
+  编译并运行如下:
+```
+bogon:signal apple$ ./signal &
+[1] 1912
+bogon:signal apple$ kill -USR1 1912
+recevied SIGUSR1
+bogon:signal apple$ kill -USR2 1912
+received SIGUSR2
+bogon:signal apple$ kill 1912
+bogon:signal apple$ ls -la
+total 48
+drwxr-xr-x   5 apple  staff    170 12 11 16:35 .
+drwxr-xr-x  13 apple  staff    442 12 11 15:34 ..
+-rw-r--r--   1 apple  staff    261 12 11 15:34 makefile
+-rwxr-xr-x   1 apple  staff  13684 12 11 16:35 signal
+-rw-r--r--   1 apple  staff    544 12 11 16:35 signal.c
+[1]+  Terminated: 15          ./signal
+```
+#### 10.3.1 程序启动
+  当执行一个程序时，所有信号的状态都是系统默认或忽略。通常所有信号都被设置为系统默认动作，除非调用exec的进程忽略该信号。比较特殊的是，exec函数将原先设置为要捕捉的信号都更改为默认动作，其他信号的状态则不变(一个进程原先要捕捉的信号，当其执行一个新程序后，就自然地不能再捕捉了，因为信号捕捉函数的地址很可能再所执行的新程序文件中已无意义。)
+  我们经常会碰到的一个具体例子是一个交互shell如何处理对后台进程的中断和退出信号。对于一个非作业控制shell,当在后台执行一个进程时，例如:`cc main.c &`
+  shell自动将后台进程对中断和退出信号的处理方式设置为忽略。于是，当按中断键时就不会影响到后台进程。如果没有这样的处理，那么当按中断键时，他不但终止前台进程，也终止所有后台进程。
+  很多捕捉这两个信号的交互程序具有下列形式的代码:
+```
+int sig_int(), sig_quit();
+if(signal(SIGINT, SIG_IGN) != SIG_IGN)
+  signal(SIGINT, sig_int);
+if(signal(SIGQUIT, SIG_IGN) != SIG_IGN)
+  signal(SIGQUIT, sig_quit());
+```
+  这样处理后，仅当SIGINT和SIGQUIT当前并不忽略，进程才捕捉它们。
+  从signal的这两个调用中也可以看到这种函数的限制:不改变信号的处理方式就不能确定信号的当前处理方式。我们将在本章的稍后部分说明使用sigaction函数可以确定一个信号的处理方式，而无需改变它。
+  
+#### 10.3.2 进程创建
+  当一个进程调用fork时，其子进程继承父进程的信号处理方式。因为子进程在开始时复制了父进程存储图像，所以信号捕捉函数的地址在子进程中是有意义的。
+
+### 10.4 不可信信号
+  在早期的Unix版本中，信号是不可靠的。不可靠在这里指的是，信号可能会丢失---一个信号发生了，但进程却绝不知道这一点。那时，进程对信号的控制能力也很低，他能捕捉信号或忽略它，但有些很需要的功能他却不具备。例如，有时候用户希望通知内核阻塞一信号--不要忽略该信号，在其发生时记住它，然后在进程做好了准备时再通知它。这种阻塞信号的能力当时并不具备。
+  
+  早期版本中的一个问题是在进程每次处理信号时，随即将信号动作复置为默认值.以下是早期版本中关于如何处理中断信号的经典实例的代码:
+```
+int sig_int();  /** 自定义信号处理函数 **/
+
+...
+signal(SIGINT, sig_int); /** 确立信号处理函数 **/
+
+sig_int()
+{
+  signal(SIGINT, sig_int); /** 重新确立下次发生信号的信号处理函数 **/
+  
+  ... /** 处理信号 **/
+}
+``` 
+  由于早期的C语言版本不支持ANSI C的void类型数据，所以将信号处理程序说明为int类型。
+  
+  这种代码的一个问题是:在信号发生之后到信号处理程序中调用signal函数之间有一个时间窗口。在此段时间中，可能发生另一次中断信号。第二个信号会造成执行默认动作，而对中断信号则是终止该进程。这种类型的程序在大多数情况下会正常工作，使得我们认为它们正确，而实际上却并不是如此。
+  
+  这些早期版本的另一个问题是:在进程不希望某种信号发生时，它不能关闭该信号。进程能做的就是忽略该信号。有时希望通知系统“阻塞下列信号发生，如果它们确实产生了，请记住它们。”这种问题的一个经典实例是下列程序段，它捕捉一个信号，然后设置一个表示该信号已经发生的标志:
+```
+int sig_int_flag; /** 当信号发生时设置非零 **/
+main()
+{
+  int sig_int(); /** 自定义信号处理函数 **/
+  
+  signal(SIGINT, sig_int); /** 确定信号处理函数 **/
+  
+  while(sig_int_flag == 0)
+    pause();    /** go to sleep, waiting for signal **/
+  ...
+}
+
+sig_int()
+{
+  signal(SIGINT, sig_int); /** 重新确立下次信号发生时的信号处理函数 **/
+  sig_int_flag = 1; /** 设置标志，让其在main主循环中检查 **/
+}
+```
+  其中，进程调用pause()函数使自己睡眠，直到捕捉到一个信号。当信号被捕捉到后，信号处理程序将标志sig_int_flag设置为非0.在信号处理程序返回之后，内核将该进程唤醒，它检测到该标志位位非0，然后执行它所需做的。但是这里也有一个时间窗口，可能使操作错误。如果在测试sig_int_flag之后，调用pause之前发生信号，则此进程可能会一直睡眠(假定次信号不再次产生)。于是，这次发生的信号也就丢失了。还有另一个例子，某段代码并不正确，但是大多数时间却能正常工作。要查找并排除这种类型的问题很困难。
+  
 ### 10.5 中断系统调用
 
 ### 10.6 可重入函数
