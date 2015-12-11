@@ -28,6 +28,9 @@
   ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/unix_signal1.png)
   ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/unix_signal2.png)
 
+  在系统默认动作列，终止w/core表示在进程当前工作目录的core文件中国年复制了该进程的存储图像(该文件名为core,由此可以看出这种功能很久之前就是Unix功能的一部分)。大多数Unix调试程序都使用core文件以检查进程在终止时的状态。在下列条件下不产生core文件:
+  
+
 
 ### 10.3 signal函数
 
