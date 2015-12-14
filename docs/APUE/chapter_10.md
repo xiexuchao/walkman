@@ -241,10 +241,32 @@ again:
   
 
 ### 10.7 SIGCLD语义
+  SIGCLD和SIGCHLD这两个信号经常易于混淆。SIGCLD是系统V的一个信号名，其语义与名SIGCHLD的BSD信号不同。POSIX.1则采用BSD的SIGCHLD信号。
+  BSD的SIGCHLD信号的语义与其他信号的语义相类似。子进程状态改变后产生此信号，父进程需要调用一个wait函数以检测发生了什么。
+  
+  由于历史的原因，系统V处理SIGCLD信号的方式不同于其他信号，如果用signal或sigset设置信号配置，则SVR4继续了这一具有问题色彩的传统。对于SIGCLD早期的处理方式是:
+  1. 如果进程特地指定了堆该信号的配置为SIG_IGN,则调用进程的子进程将不产生僵死进程。注意，这与其默认动作SIG_DFL忽略不同。代之以，在子进程终止时，将其状态丢弃。如果调用进程最后调用一个wait函数，那么它将阻塞到所有子进程都终止，然后wait会返回-1,其errno则设置为ECHILD. 
+  2. 如果将SIGCLD的配置设置为捕捉，则内核立即检查是否有子进程准备好被等待，如果是这样，则调用SIGCLD处理程序。
+  
+  
 
 ### 10.8 可信信号术语及语义
 
 ### 10.9 kill和raise函数
+  kill函数将信号发送给进程或进程组。raise函数则允许进程向自身发送信号。
+```
+  raise是由ANSI C而非POSIX.1定义的。因为ANSI C并不涉及多进程，所以它不能定义如kill这样要有一个进程ID作为其参数的函数。
+
+#include <sys/types.h>
+#include <signal.h>
+int kill(pid_t pid, int signo);
+int raise(int signo);
+```
+  kill的pid参数有四种不同的情况:
+  1. pid > 0: 将信号发送给进程ID为pid的进程
+  2. pid == 0: 将信号发送给其进程组ID等于发送进程的进程组ID,而且发送进程有许可权向其发送信号的的所有进程。
+  3. pid < 0: 将信号发送给其进程组ID等于pid绝对值，而且发送进程有许可权向其发送信号的所有进程。如上所述，所有进程并不包括系统进程集中的进程。
+  4. pid == -1: POSIX.1未定义此种情况。
 
 ### 10.10 alarm和pause函数
 
