@@ -134,7 +134,43 @@ nwrite = 349, errno = 0
   SVR3通过fcntl函数增加了记录锁功能。在此基础上构造了lockf函数，它提供了一个简化的接口。这些函数允许调用者对一个文件中任意字节的区域加锁，长至整个文件，短至文件中的一个字节。
   POSIX.1标准的基础是fcntl方法。图14-2列出了各种系统提供的不同形式的记录锁。注意，Single Unix Specification在其XSI扩展中包括了lockf.
   ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/flock_support.png)
+  本章最后将说明建议性锁和强制性锁的区别。本书只介绍POSIX.1的fcntl锁。
+```
+记录锁是1980年由John Bass最早加到V7上的。内核中相应的系统调用入口表 项是名为locking的函数。此函数提供了强制性记录锁功能,它被用在很多制造商的 系统III版本中。Xenix系统采用了此函数,SVR4在Xenix兼容库中仍旧支持该函数。
+SVR2是系统V中第一个支持fcntl风格记录锁的版本( 1984年)。
+```
+#### 14.3.2 fcntl记录锁
+  3.14节中已经给出了fcntl函数的原型。为了述说方便，这里再次重复一次:
+```
+#include <fcntl.h>
+int fcntl(int fd, int cmd, .../* struct flock *flockptr */);
+          返回值: 若成功，依赖于cmd, 否则返回-1
+```
+  对于记录锁，cmd是F_GETLK, F_SETLK或F_SETLKW. 第三个参数(我们将调用flockptr)是一个指向flock的结构指针。
+```
+struct flock{
+  short l_type; /** F_RDLCK, F_WRLCK, Or F_UNLCK **/
+  short l_whence; /** SEEK_SET, SEEK_CUR, or SEEK_END **/
+  off_t l_start; /** offset in bytes, relative to l_whence **/
+  off_t l_len; /** length, in bytes, o means lock to EOF; **/
+  pid_t l_pid; /** returned with F_GETLK **/
+}
+```
+  对于flock结构说明如下:
+  * 所希望的锁类型:F_RDLCK(共享读锁)、F_WRLCK(独占性写锁)、F_UNLCK(解锁一个区域)
+  * 要加锁或解锁的起始字节偏移量(l_start和l_whence).
+  * 区域的字节长度(l_len)
+  * 进程的ID(l_pid)持有的锁能阻塞当前进程(仅由F_GETLK返回)。
+  
+  关于加锁或解锁区域的说明还要注意下列几项规则。
+  * 指定区域起始偏移量的两个元素与lseek函数中最后两个参数类似。l_whence可选用的值是SEEK_SET, SEEK_CUR, 或SEEK_END。
+  * 锁可以在当前文件尾端处开始或者越过尾端处开始，但是不能在文件起始位置之前开始。
+  * 如若l_len为0，则表示锁的范围可以扩展到最大可能偏移量。这意味着不管向该文件中追加写了多少数据，它们都可以处于锁的范围内(不必猜测会有多少字节被追加写到文件之后)，而且起始位置可以是文件中的任意一个位置。
+  * 为了对整个文件加锁，我们设置l_start和l_whence指向文件的起始位置，并且指定长度l_len为0.(有多种方法可以指定文件起始处，但常用的方法是将l_start指定为0，l_whence指定为SEEK_SET).
+  
+  上面提到了两种类型的锁:共享读锁(l_type为L_RDCLK)和独占性写锁(l_type为L_WRCLK).基本规则是:任意多个进程在一个给定的字节上可以有一把共享的读锁，但是在一个给定字节上只能有一个进程有一把独占写锁。进一步而言，如果在一个给定字节上已经有一把或多把读锁，则不能在该字节上再加写锁；如果再一个自街上已经有一把独占性写锁，则不能再对它加任何读锁。在图14-3中示范了这些兼容性规则。
 
+  
 ### 14.4 I/O复用
 
 ### 14.5 select和pselect函数
