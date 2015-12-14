@@ -193,10 +193,133 @@ struct flock{
 > 为了避免每次分配flock结构，然后又填入各项信息，可用下面的函数lock_reg来处理所有细节。
 
 ```
-  a
-```
-  
+#include "apue.h"
+#include <fcntl.h>
 
+int
+lock_reg(int fd, int cmd, int type, off_t offset, int whence, off_t len)
+{
+    struct flock lock;
+    lock.l_type = type; /** F_RDLCK, F_WRLCK, F_UNLCK **/
+    lock.l_start = offset; /** byte offset, relative to l_whence **/
+    lock.l_whence = whence; /** SEEK_SET, SEEK_CUR, SEEK_END **/
+    lock.l_len = len;   /** bytes (0 means to EOF) **/
+
+    return (fcntl(fd, cmd, &lock));
+}
+```
+  因为大多数锁调用是加锁或解锁一个文件区域(命令F_GETLK很少使用)，故而通常使用下面5个宏中的一个，这5个宏都定义到apue.h中。
+```
+#define read_lock(fd, offset, whence, len) \
+    lock_reg((fd), F_SETLK, F_RDLCK, (offset), (whence), (len))
+
+#define readw_lock(fd, offset, whence, len) \
+    lock_reg((fd), F_SETLKW, F_RDLCK, (offset), (whence), (len))
+
+#define write_lock(fd, offset, whence, len) \
+    lock_reg((fd), F_SETLK, F_WRLCK, (offset), (whence), (len))
+
+#define writew_lock(fd, offset, whence, len) \
+    lock_reg((fd), F_SETLKW, F_WRLCK, (offset), (whence), (len))
+
+#define un_lock(fd, offset, whence, len) \
+    lock_reg((fd), F_SETLK, F_UNLCK, (offset), (whence), (len))
+```
+  我们有目的地用与lseek函数同样地顺序定义了这些宏中的前三个参数。
+  
+  实例: 测试一把锁
+  下面定义了一个函数lock_test,用于测试一把锁。
+```
+pid_t
+lock_test(int fd, int type, off_t offset, int whence, off_t len)
+{
+    struct flock lock;
+
+    lock.l_type = type; /** F_RDLCK, F_WRLCK, F_UNLCK **/
+    lock.l_start = offset; /** byte offset, relative to l_whence **/
+    lock.l_whence = whence; /** SEEK_SET, SEEK_CUR, SEEK_END **/
+    lock.l_len = len;   /** bytes (0 means to EOF) **/
+
+    if(fcntl(fd, F_GETLK, &lock) < 0)
+        err_sys("fcntl error");
+
+    if(lock.l_type == F_UNLCK)
+        return (0); /** false, region isn't locked by annother proc **/
+
+    return (lock.l_pid); /** true, return pid of lock owner **/
+}
+```
+  如果存在一把锁，它阻塞由参数指定的锁请求，则此函数返回持有这把现有锁的进程的进程ID, 否则此函数返回0。通常用下面两个宏来调用此函数。
+```
+#define is_read_lockable(fd, offset, whence, len) \
+    (lock_test((fd), F_RDLCK, (offset), (whence), (len)) == 0)
+
+#define is_write_lockable(fd, offset, whence, len) \
+    (lock_test((fd), F_WRLCK, (offset), (whence), (len)) == 0)
+```
+  注意，进程不能使用lock_test函数测试它自己是否再文件的某一部分持有一把锁。F_GETLK命令的定义说明，返回信息指示是否有现有的锁阻止调用进程设置它自己的锁。因为F_SETLK和F_SETLKW命令总是替换调用进程现有的锁(若已存在)，所以调用进程绝不会阻塞再自己持有的锁上，于是，F_GETLK命令决不会报告调用进程自己持有的锁。
+
+  实例:死锁
+> 如果两个进程相互等待对方持有并且不释放(锁定)的资源时，则这两个进程就处于死锁状态。如果一个进程已经控制了文件中的一个加锁区域，然后它又试图对另一个进程控制的区域加锁，那么它就会休眠，在这种情况下，又发生死锁的可能性。 下面程序给出了一个死锁的例子。子进程对第0字节加锁，父进程对第1字节进行加锁。然后，它们中的每一个又试图对对方已经加锁的字节加锁。在该程序中使用了前面介绍的父子进程同步例程(TELL_xxx)和(WAIT_xxx),以便每个进程都能够等待另一个进程获得它设置的第一把锁。
+
+```
+#include "apue.h"
+#include <fcntl.h>
+
+static void
+lockabyte(const char *name, int fd, off_t offset)
+{
+    if(writew_lock(fd, offset, SEEK_SET, 1) < 0)
+        err_sys("%s: writew_lock error", name);
+
+    printf("%s: got the lock, byte %lld\n", name, (long long)offset);
+}
+
+
+int
+main(void)
+{
+    int fd; 
+    pid_t pid;
+
+    if((fd = creat("templock", FILE_MODE)) < 0)
+        err_sys("creat error");
+
+    if(write(fd, "ab", 2) != 2)
+        err_sys("write error");
+
+    TELL_WAIT();
+    if((pid = fork()) < 0) {
+        err_sys("fork error");
+    } else if(pid == 0) { /** child process **/
+        lockabyte("child", fd, 0); 
+        TELL_PARENT(getppid());
+        WAIT_PARENT();
+        lockabyte("child", fd, 1); 
+    } else {
+        lockabyte("parent", fd, 1); 
+        TELL_CHILD(pid);
+        WAIT_CHILD();
+
+        lockabyte("parent", fd, 0); 
+    }   
+
+    exit(0);
+}
+```
+  编译并运行，结果如下，
+```
+bogon:advio apple$ ./deadlock 
+parent: got the lock, byte 1
+child: got the lock, byte 0
+parent: writew_lock error: Resource deadlock avoided
+child: got the lock, byte 1
+```
+  检测到死锁时，内核必须选择一个进程接受出错返回。在本例中，选择了父进程，但这是一个实现细节。在某些系统上，子进程总是接到出错信息，在另一些系统上，父进程总是接到出错信息。在某些系统上，当试图使用多把锁时，有时是子进程接到出错信息，有时是父进程接到出错信息。
+  
+#### 14.3.3 锁的隐含继承和释放
+
+  
 ### 14.4 I/O复用
 
 ### 14.5 select和pselect函数
