@@ -169,7 +169,7 @@ struct flock{
   * 为了对整个文件加锁，我们设置l_start和l_whence指向文件的起始位置，并且指定长度l_len为0.(有多种方法可以指定文件起始处，但常用的方法是将l_start指定为0，l_whence指定为SEEK_SET).
   
   上面提到了两种类型的锁:共享读锁(l_type为L_RDCLK)和独占性写锁(l_type为L_WRCLK).基本规则是:任意多个进程在一个给定的字节上可以有一把共享的读锁，但是在一个给定字节上只能有一个进程有一把独占写锁。进一步而言，如果在一个给定字节上已经有一把或多把读锁，则不能在该字节上再加写锁；如果再一个自街上已经有一把独占性写锁，则不能再对它加任何读锁。在图14-3中示范了这些兼容性规则。
-
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/flock_comp.png)
   
 ### 14.4 I/O复用
 
