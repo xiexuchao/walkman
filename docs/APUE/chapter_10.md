@@ -269,6 +269,62 @@ int raise(int signo);
   4. pid == -1: POSIX.1未定义此种情况。
 
 ### 10.10 alarm和pause函数
+  使用alarm函数可以设置一个时间值(闹钟时间)，在将来的某个时刻该时间值会被超过。当所设置的时间值被超过后，产生SIGALRM信号。如果不忽略或不捕捉此信号，则其默认动作是终止该进程。
+  
+```
+#include <unistd.h>
+unsigned int alarm(unsigned int seconds);
+```
+  其中，参数seconds的值是秒数，经过了指定的seconds秒数后会产生信号SIGALRM. 要了解的是，经过了指定秒数后，信号由内核产生，由于进程调度的延迟，进程得到控制能够处理该信号还需要一段时间。
+```
+  早期的Unix版本曾提出警告，这种信号可能比预定值提前1秒发送。POSIX.1则不允许这样做。
+```
+  每个进程只能由一个闹钟时间。如果在调用alarm时，以前已为该进程设置过闹钟时间，而且它还没有超时，则闹钟时间的余留值作为本次alarm函数调用的值返回。以前登记的闹钟时间则被新值代换。
+  
+  如果有以前登记的尚未超过的闹钟时间，而且seconds值是0，则取消以前的闹钟时间，其余留值仍作为函数的返回值。
+  
+  虽然SIGALRM的默认动作是终止进程，但是大多数使用闹钟的进程捕捉此信号。如果此时进程要终止，则在终止之前它可以执行所需的清除操作。
+  
+  pause函数使调用进程挂起直至捕捉到一个信号。
+```
+#include <unistd.h>
+int pause(void);
+```
+  只有执行了一个信号处理程序并从其返回时，pause才返回。在这种情况下，pause返回-1, errno设置为EINTR.
+  
+```
+#include <signal.h>
+#include <unistd.h>
+
+static void
+sig_alrm(int signo)
+{
+    return ; /** nothing to do, just return to wake up the pause **/
+}
+
+unsigned int 
+sleep1(unsigned int nsecs)
+{
+    if(signal(SIGALRM, sig_alrm) == SIG_ERR)
+        return nsecs;
+
+    alarm(nsecs); /** start the timer **/
+    pause(); /** next caught signal wakes us up **/
+
+    return (alarm(0)); /** turn off timer, return unslept time **/
+}
+```
+  程序中的sleep1函数看起来与将在10.19节中说明的sleep函数类似，但这种简化实现有如下列问题:
+  1. 如果调用者已设置了闹钟，则它被sleep1函数中的第一次alarm调用擦去。
+  <ul>
+    <li>可用下列方法更正这一点:检查第一次调用alarm的返回值，如果其小于本次调用alarm的参数值，则只应等到该前次设置的闹钟时间超时。如果前次设置闹钟时间的超时时刻后于本次设置值，则在sleep1函数返回之前，再次设置闹钟时间，使其在预定时间再发生超时。</li>
+  </ul>
+  2. 该程序中修改了堆SIGALRM的配置。如果编写了一个函数供其他函数调用，则再该函数被调用时先要保存原配置，再函数返回前再恢复原配置。
+  3. 在调用alarm和pause之间有一个静态条件。在一个繁忙的系统中，可能alarm在调用pause之前超时，并调用了信号处理程序。如果发生了这种情况，则在调用pause后，如果没有捕捉到其他信号，则调用者将永远被挂起。
+  
+  sleep的早期实现与上面的程序类似，但更正了1，2问题。有两种方法可以更正问题3. 第一种方法是使用setjmp, 下面立即说明这种方法。另一种方法是使用sigprocmask和sigsuspend,10.19节将说明这种方法。
+
+
 
 ### 10.11 信号设置
 
