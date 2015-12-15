@@ -550,23 +550,283 @@ while((n = read(STDIN_FILENO, buf, BUFFSIZ)) > 0)
   处理这种特殊问题的一种方法是:将一个进程变成两个进程(用fork),每个进程处理一跳数据通路。下图显示了这种安排。System V的uucp通信包提供了cu(1)命令，其结构与此相似。
   ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/telnet_with_2processes.png)
   
+  如果使用两个进程，则可使每个进程都执行阻塞read. 但是这样也产生了问题: 操作什么时候终止?如果子进程接收到文件结束符(telnetd守护进程使网络连接断开)，那么该子进程终止，然后父进程收到SIGCHLD信号。但是如果父进程终止(用户在终端上键入了文件结束符)，那么父进程应通知子进程停止。为此可以使用一个信号(如SIGUSR1), 但这使得程序变得更加复杂。
   
-### 14.5 select和pselect函数
+  我们可以不使用两个进程，而是用一个进程中的两个线程。虽然这避免了终止的复杂性，但却要处理两个线程之间的同步，在复杂性方面这可能会得不偿失。
+  
+  另一个方法，仍旧是使用一个进程执行该程序，但使用非阻塞I/O读取数据。其基本思想是: 将两个输入描述符都设置为非阻塞的，对第一个描述符发一个read.如果该输入上有数据，则读数据并处理它。如果无数据可读，则该调用立即返回。然后对第二个描述符做同样的处理。在此之后，等待一定的时间(可能是若干秒)，然后再尝试从第一个描述符读。这种形式的循环称为轮询。这种方法的不足之处是浪费CPU时间。大多数时间实际上是无数据可读，因此执行read系统调用浪费了时间。在每次循环后要等待多长时间在执行下一轮循环也很难确定。虽然轮询技术在支持非阻塞I/O的所有系统上都可用，但是在多任务系统中应当避免使用这种方法。
+  
+  还有一种技术称为异步I/O(asynchronous I/O).利用这种技术，进程告诉内核: 当描述符准备好可以进行I/O时，用一个信号通知它。这种技术有两个问题: 首先，尽管一些系统提供了各自首先形式的异步I/O，但POSIX采纳了另外一套标准化接口，所以可移植性成为一个问题(以前POSIX异步I/O是Single Unix Specification中是可选设施，但现在，这些接口在SUSv4中是必须的)。System V提供了SIGPOLL信号来支持受限形式的异步I/O, 但是仅当描述符引用STREAMS设备时，此信号才起作用。BSD有一个类似的信号SIGIO, 但也有类似的限制: 仅当描述符引用终端设备或网络时它才能起作用。
+  
+  这种技术的第二个问题是，这种信号对每个进程而言只有一个(SIGPOLL或SIGIO)。如果使该信号对两个描述符都起作用(在我们讨论的实例中，从两个描述符读)，那么进程在接到此信号时将无法判断时哪一个描述符准备好了。尽管POSIX.1异步I/O接口允许选择哪个信号作为通知，但能用的信号数量仍远小于潜在的打开文件描述符的数量。为了确定时哪一个描述符准备好了，仍需将这两个描述符都设置为非阻塞的，并顺序尝试执行I/O. 我们将在14.5中讨论异步I/O.
+  
+  一个比较好的技术是使用I/O多路复用(I/O multiplexing). 为了使用这种技术，先构造一些我们感兴趣的描述符(通常不止一个)的列表，然后调用一个函数，直到这些描述符中的一个已准备好进行I/O时，该函数才返回。poll, pselect和select这3个函数使我们能够执行I/O多路转接。在从这些函数返回时，进程会被告知哪些描述符已经准备好进行I/O.
 
-### 14.6 poll函数
+> POSIX指定，为了在程序中使用select, 必须包含<sys/select.h>. 但较老的系统还需要包括<sys/types.h>, <sys/time.h>和<unistd.h>. 查看select手册可以弄清楚你的系统都支持什么。
+> I/O多路转接在4.2BSD中使用select函数提供的。虽然该函数主要用于终端I/O和网络I/O, 但它对其他描述符同样起作用的。SVR3在增加STREAMS机制时增加了poll函数。但在SVR4之前，poll只对STREAMS设备起作用。SVR4支持对任一描述符其作用的poll.
 
-### 14.7 异步I/O
+#### 14.4.1 select和pselect函数
+  在所有POSIX兼容的平台上，select函数使我们可以执行I/O多路转接。传给select的参数告诉内核:
+  * 我们关心的描述符
+  * 对于每个描述符我们所关心的条件(是否想从一个给定的描述符读，是否想写一个给定的描述符，是否关心一个给定描述符的异常条件)
+  * 愿意等待多长时间(可以永远等待、等待一个固定的时间或者根本不等待)
+  
+  从select返回时，内核告诉我们:
+  * 已经准备好的描述符总数量
+  * 对于读写或异常这三个条件中的每一个，哪些描述符已准备好。
+  
+  使用这种返回信息，就可调用相应的I/O函数(一般是read或write), 并且却只该函数不会阻塞。
+```
+#include <sys/select.h>
+int select(int maxfdp1, fd_set *restrict readfds,
+fd_set *restrict writefds, fd_set *restrict exceptfds, struct timeval *restrict tvptr);
+              Returns: count of ready descriptors, 0 on timeout, −1 on error
+```
+  先来说明最后一个参数，它指定愿意等待的时间长度，单位为秒和微秒。有以下三种情况:
+  * tvptr == NULL: 永远等待。如果捕捉到一个信号则终端此无限期等待。当所指定的描述符中的一个已准备好或捕捉到一个信号则返回。如果捕捉到一个信号，则select返回-1, errno设置为EINTR.
+  * tvptr->tv_sec == 0 && tvptr->tv_usec == 0: 根本不等待。测试所有指定的描述符并立即返回。这时轮询系统找到多个描述符状态而不阻塞select函数的方法。
+  * tvptr->tv_sec != 0 || tvptr->tv_usec != 0: 等待指定的秒数或微秒数。当指定的描述符之一已准备好，或当指定的时间值已经超过时立即返回。如果在超过到期时还没有一个描述符准备好，则返回值为0.(如果系统不提供微秒级的精度，则tvptr->tv_usec取汁到最近的支持值。)与第一种情况一样，这种等待可被捕捉到的信号中断。
 
-### 14.8 System V异步I/O
+> POSIX.1允许实现修改timeval结构中的值，所以在select返回后，你不能指望该结构仍旧保持调用select之前它所包含的值。FreeBSD8.0, Mac OS X 10.6.8和Solaris 10都保持该结构中的值不变。但是，若在超过时间尚未到期时，select就返回，那么Linux3.2.0将用剩余时间值更新该结构。
 
-### 14.9 BSD异步I/O
+  中间3个参数readfds, writefds, exceptfds是指向描述符集的指针。这3个描述符集说明了我们关心的可读、可写或处于异常条件的描述符集合。每个描述符存储在一个fd_set数据类型中。这个数据类型是由实现选择的，它可以为每一个可能的描述符保持一位。我们可以认为它只是一个很大的字节数组，如下图:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/multiplexing_select_fds.png)
+  
+  对于fd_set数据类型，唯一可以进行的处理是: 分配一个这中类型的变量，将这种类型的一个变量值赋给同样类型的另一个变量，或对这种类型的变量使用下列4个函数中的一个。
+```
+#include <sys/select.h>
+int FD_ISSET(int fd, fd_set *fdset);
+void FD_CLR(int fd, fd_set *fdset);
+void FD_SET(int fd, fd_set *fdset);
+void FD_ZERO(fd_set *fdset);
+```
+  这些接口可以实现宏或函数。调用FD_ZERO将一个fd_set变量的所有位设置为0. 要开启描述符集中的一位，可以调用FD_SET. 调用FD_CLR可以清除一位。最后可以调用FD_ISSET测试描述符集合中的一个指定位是否打开。
+  
+  在声明了一个描述符集合后，必须用FD_ZERO将这个描述符集置为0，然后在其中设置关心的各个描述符的位。具体操作如下:
+```
+fdset rset;
+int fd;
+FD_ZERO(rset);
+FD_SET(fd, &rset);
+FD_SET(STDIN_FILENO, &rset);
+```
+  从select返回时，可以用FD_ISSET测试该集中的一个给定位是否仍处于打开状态:
+```
+if(FD_ISSET(fd, &rset)) {
+  ...
+}
+```
+  select的中间三个参数中的任一个可以是空集，这表示对相应条件并不关心。如果所有3个指针都是NULL, 则select提供了比sleep更精准的定时器。(回忆一下10.19， sleep等待整数秒，而select的等待时间则可以小于1秒，其实际精度取决于系统时钟。)
+  
+  select的第一个参数maxfdp1的意思是最大文件描述符编号加1. 考虑所有3个描述符集，在3个描述符集中找出最大描述符编号值，然后加1，这就是第一个参数值。也可将第一个参数设置为FD_SETSIZE, 这是<sys/select.h>中的一个常数，它指定最大描述符(经常是1024)，但是绝大多数应用程序而言，此值太大了。确实，大多数应用程序只使用3-10个描述符(某些应用程序需要更多的描述符，但这种Unix程序并不典型)。通过指定我们所关注的最大描述符，内核就只需要在此范围内寻找打开的位，而不比在3个描述符集中的数百个没有使用的位内搜索。
+  
+  例如，下图所示的描述符集情况就好像是执行了下述操作:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/select_sample_fdsets.png)
+```
+fdset readset, writeset;
+FD_ZERO(&readset);
+FD_ZERO(&writeset);
 
-### 14.10 POSIX异步I/O
+FD_SET(0, &readset);
+FD_SET(3, &readset);
 
-### 14.11 readv和writev函数
+FD_SET(1, &writeset);
+FD_SET(2, &writeset);
 
-### 14.12 readn和writen函数
+select(4, &readset, &writeset, NULL, NULL);
+```
+  因为描述符从0开始，所以要在最大描述符编号值上加1.第一个参数实际上是要检查的描述符数(从描述符0开始)。
+  select有3个可能的返回值:
+  1. 返回值-1表示出错。 这是可能发生的，例如，在所指定的描述符一个都没准备好时捕捉到一个信号。在此种情况下，一个描述符集都不修改。
+  2. 返回值0表示没有描述符准备好。若指定的描述符一个都没准备好，指定的时间就过了，那么就会发生这种情况。此时，所有描述符集合都被置0.
+  3. 一个正返回值说明了已经准备好的描述符数。该值是3个描述符集中已经准备好的描述符数之和，所以如果同一描述符已经准备好读写，那么在返回值中会对其计数两次。这这种情况下，3个描述符集中仍旧打开的位对应于已经准备好的描述符。
+  
+  对于准备好的含义需要作进一步具体的说明:
+  * 若对读集(readfds)中的一个描述符进行的read操作不会阻塞，则认为此描述符是准备好的。
+  * 若对写集(writefds)中的一个描述符进行的write操作不会阻塞，则认为此描述符是准备好的。
+  * 若对异常条件集(exceptfds)中的一个描述符有一个未决异常条件，则认为此描述符是准备好的。现在，异常条件包括: 在网络连接上到达带外的数据，或者在处于数据包模式的伪终端上发生了某些条件.
+  * 对于读写和异常条件，普通文件的文件描述符总是返回准备好。
+  
+  一个描述符阻塞与否并不影响select是否阻塞，理解这一点很重要。也就是说，如果希望读一个非阻塞描述符，并且以超时值位5秒调用select，则select最多阻塞5秒。相类似，如果指定一个无限的超时值，则在该描述符数据准备好，或捕捉到一个信号之前，select会一直阻塞。
 
-### 14.13 内存映射I/O
+  如果在一个描述符上碰到了文件尾端，则select会认为该描述符是可读的。然后调用read，它返回0， 这是Unix系统只是到达文件尾端的方法。(很多人错误的认为，当到达文件尾端时，select也会只是一个异常条件)。
+  
+  POSIX.1也定义了一个select的变体，称为pselect.
+```
+#include <sys/select.h>
+int pselect(int maxfdp1, fd_set *restrict readfds,
+fd_set *restrict writefds, fd_set *restrict exceptfds, const struct timespec *restrict tsptr,
+const sigset_t *restrict sigmask);
 
-### 14.14 总结
+  返回值: 准备就绪的描述符数目；若超时，返回0；若出错，返回－1.
+```
+  除下列几点，pselect和select相同。
+  * select的超时值用timeval结构指定，但pselect使用timespec结构。timespec结构以秒和纳秒表示超时值，而非秒和微秒。如果平台支持这样的时间精度，那么timespec就能提供更精准的超时时间。
+  * pselect的超时值被声明为const, 这保证了调用pselect不会改变此值
+  * pselect可使用可选信号屏蔽字。若sigmask为NULL，那么在与信号有关的方面，pselect的运行状况和select相同。否则，sigmask指向一个信号屏蔽字，在调用pselect时，以原子操作的方式安装该信号屏蔽字。在返回时，恢复以前的信号屏蔽字。
+  
+  
+#### 14.4.2 poll函数
+  poll函数类似于select,但是程序员接口有所不同。虽然poll函数是System V引入来支持STRAEMS子系统的，但是poll函数可用于任何类型的文件描述符。
+```
+#include <poll.h>
+int poll(struct pollfd fdarray[], nfds_t nfds, int timeout);
+    Returns: count of ready descriptors, 0 on timeout, −1 on error
+```
+  与select不同，poll不是为每个条件(可读、可写和异常条件)构造一个描述符集。而是构造一个pollfd结构的数组，每个数据元素指定一个描述符编号以及我们对该描述符感兴趣的条件。
+```
+struct pollfd{
+  int fd; /** 要检查的文件描述符，或者使用<0的值忽略要检查的描述符 **/
+  short events; /** 感兴趣的fd的事件集合 **/
+  short revents; /** 发生在fd上面的事件集合 **/
+}
+```
+  fdarray数组中的元素由nfds指定。
+> 由于历史原因，在如何声明nfds参数方面有几种不同的方式。SVR3将nfds的类型指定为unsigned long, 这似乎太大了。在SVR4手册中, poll原型的第二个参数数据类型为size_t. 但在<poll.h>包含的实际原型中，第二个参数的数据类型仍指定为unsigned long. Single Unix Specification定义了新类型nfds_t, 该类型允许实现选择对其合适的类型并且隐藏了应用细节。注意，因为返回值表示数组中满足事件的项数，所该中类型必须大得足以保存一个整数。
+
+> 对应于SVR4的SVID上显示，poll的第一个参数是struct pollfd fdarray[], 而SVR4手册页上则显示该参数为struct pollfd *fdarray. 在C语言中，这两种声明是等价的。我们使用第一种声明是为了重申fdarray指向的是一个结构数组，而不是指向单个结构的指针。
+
+  应将每个数组元素的events成员设置为图14-17中所示值的一个或几个，通过这些值告诉内核我们关心的是每个描述符的哪些事件。返回时，revents成员由内核设置，用于说明每个描述符发生了哪些事件。(注意，poll没有更改events成员。这与select不同，select修改其canshu以指示哪一个描述符已经准备好了。)
+  
+  图14-17中的前4行测试的是可读性，接下来的3行测试的是可写性，最后3行测试的是异常条件。最后3行是由内核在返回时设置的。即使在events字段中没有指定这3个值，如果相应条件发生，在revents中也会返回它们。
+  
+> 有些poll事件名字中包含BAND, 它指的是STREAMS当中优先级波段。想要了解关于STREAMS和优先级波段的更多信息，可以查看Rago[1993].
+  
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/poll_events_revents_flags.png)
+
+  当一个描述符被挂断(POLLHUP)后，就不能再写该描述符，但是有可能仍然可以从该描述符读取到数据。
+  poll的最后一个参数指定的是我们愿意等待多长时间。如同select一样，有3种不同的情形:
+  * timeout == -1: 永远等待。
+  * timeout == 0: 不等待
+  * timeout > 0: 等待timeout毫秒。
+  
+  理解文件尾端与挂断之间的区别是很重要的。如果我们正从终端输入数据，并键入文件结束符，那么就会打开POLLIN,于是我们就可以读文件结束指示(read返回0). revents中的POLLHUP没有打开。如果正在读调制解调器，并且电话线已经挂断，我们将接到POLLHUP通知。
+  与select一样，一个描述符是否阻塞不会影响poll是否阻塞。
+
+  select和poll的可中断性
+  中断的系统调用的自动重启是由4.2BSD引入的，但当时select函数是不重启的。这种特性在大多数系统中一直延续下来，即使指定了SA_RESTART选项也是如此。但是在SVR4上，如果指定了SA_RESTART，那么select和poll也是自动重启的。为了将软件移植到SVR4派生的系统上时阻止了之一点，如果信号有可能会中断select或poll, 就要使用signal_intr函数。
+
+### 14.5 异步I/O
+  使用上一节说明的select和poll可以实现异步形式的通知。关于描述符的状态，系统并不主动告诉我们任何信息，我们需要进行查询(调用select或poll). 比如在第10章，信号机构提供了一种以异步形式通知某种事件发生的方法。由BSD和System V派生的所有系统都提供了某种形式的异步I/O,使用一个信号(在System V中是SIGPOLL，在BSD中是SIGIO)通知进程，对某个描述符所关心的某个事件已经发生。我们在前面的章节中提到过，这些形式的异步I/O是受限制的: 它们并不能用在所有的文件类型上，而且只能使用一个信号。如果要对一个以上的描述符进行异步I/O, 那么在进程接收到该信号时并不知道这一信号对应于哪一个描述符。
+  
+  SUSv4中将通用的异步I/O机制从实时扩展部分调整到基本规范部分。这种机制解决了额这些陈旧的异步I/O设施存在的局限性。
+  
+  在我们了解使用异步I/O的不同方法之前，需要先讨论一下成本。在用异步I/O的时候，要通过选择来灵活处理多个兵法操作，这回使应用程序的设计复杂化。更简单的做法可能时使用多线程，使用同步模型来编写程序，并让这些线程以异步的方式运行。
+  使用POSIX异步I/O接口，会带来下列麻烦。
+  * 每个异步操作有3处可能产生错误的地方:一处在操作提交的部分，一处操作本身的结果，还有一处在用于决定异步操作状态的函数中。
+  * 与POSIX异步I/O接口传统方法相比，它们本身涉及大量的额外设置和处理规则。
+  * 从错误中恢复可能会比较困难。举例来说，如果提交了多个异步写操作，其中一个失败了，下一步我们应该怎么做? 如果这些写操作是相关的，那么可能还需要撤销所有成功的写操作。
+  
+
+#### 14.5.1 System V异步I/O
+  在System V中，异步I/O是STREAMS系统的一部分，它只对STREAMS设备和STREAMS管道起作用。System V的异步I/O信号是SIGPOLL.
+  
+  为了对一个STREAMS设备启动异步I/O,需要调用ioctl, 将它的第二个参数(request)设置成I_SETSIG.第三个参数是由14-18中的一个或多个常量构成的整型值。这些常量是在<stropts.h>中定义的。
+  除了调用ioctl指定产生SIGPOLL信号的条件以外，还应为该信号建立信号处理程序。SIGPOLL默认动作是终止该进程，所以应当在调用ioctl之前建立信号处理函数。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/sigpoll_conds.png)
+  
+  
+#### 14.5.2 BSD异步I/O
+  在BSD派生的系统中，异步I/O是信号SIGIO和SIGURG的组合。SIGIO是通用异步I/O信号，SIGURG则只用来通知进程网络连接上的带外数据已经到达。
+  为了接收SIGIO信号，需要执行以下3步:
+  1. 调用signal或sigaction为SIGIO信号建立信号处理函数。
+  2. 以命令F_SETOWN调用fcntl来设置进程ID或进程组ID,用于接收对于该描述符的信号。
+  3. 以命令F_SETFL调用fcntl设置O_ASYNC文件状态标志，使在该描述符上可以进行异步I/O.
+  
+  第三步仅能对指向终端或网络的描述符执行，这是BSD异步I/O设施的一个基本限制。
+
+  对于SIGURG信号，只需要执行1，2步。该信号金队应用支持带外数据的网络连接描述符而产生，如TCP连接。
+
+#### 14.5.3 POSIX异步I/O
+  POSIX异步I/O接口为对不同类型的文件进行异步I/O提供了一套一致的方法。这些接口来自实时草案标准，该标准是由Single Unix Specification的可选项。在SUSv4中，这些接口被一直到了基本部分中，所以现在所有平台都被要求支持这些接口。
+  
+  这些异步I/O接口使用AIO控制块来描述I/O操作。aiocb结构定义了AIO控制块。该结构至少包括下面这些字段(具体的实现可能还包含有额外的字段)
+```
+/** asynchronous I/O control block **/
+struct aiocb{
+  int             aio_fildes; /** 文件描述符 **/
+  int             aio_offset; /** 文件I/O偏移量 **/
+  volatile void  *aio_buf; /** I/O缓存 **/
+  size_t          aio_nbytes; /** 要传输的字节数 **/
+  int             aio_reqprio; /** 优先级 **/
+  struct sigevent aio_sigevent; /** 信号函数 **/
+  int             aio_lio_opcode; /** I/O列表的操作 **/
+}
+```
+  aio_fildes字段表示被打开用来读或写的文件描述符。读或写操作从aio_offset指向的偏移量开始。对于读操作，数据会复制到缓冲区中，该缓冲区从aio_buf指定的地址开始。对于写操作，数据会从这个缓冲区中复制出来。aio_nbytes字段包含了要读或写的字节数。
+  
+  注意，异步I/O操作必须显示的指定偏移量。异步I/O接口并不影响由操作系统维护的文件偏移量。只要不再同一个进程里把异步I/O函数和传统I/O函数混在一起用在同一个文件上，就不会导致什么问题。同时值得注意的是，如果使用异步I/O接口向一个以追加模式(使用O_APPEND)打开的文件中写入数据，AIO控制块中的aio_offset字段会被系统忽略。
+  
+  其他字段和传统I/O函数中的不一致。应用程序使用aio_reqprio字段为异步I/O请求提示顺序。然而，系统对于该顺序只有有限的控制能力，因此不一定能遵循该提示。aio_lio_opcode字段只能用于基于列表的异步I/O，我们在稍后再讨论它。aio_sigevent字段控制，在I/O条件完成后，如何通知应用程序。这个字段通过sigevent结构来描述。
+```
+struct sigevent{
+  int               sigev_notify; /** 通知类型 **/
+  int               sigev_signo; /** 信号编号 **/
+  union sigval      sigev_value; /** 通知参数 **/
+  void (*sigev_notify_function)(union sigval); /** 通知函数 **/
+  pthread_attr_t *sigev_notify_attributes; /** 通知属性 **/
+}
+```
+  sigev_notify: 字段控制通知的类型。取值可能是以下3个中的一个:
+  * SIG_NONE: 异步I/O请求完成后，不通知进程
+  * SIG_SIGNAL: 异步I/O请求完成后，产生由sigev_signo字段指定的信号。如果应用程序已选择捕捉信号，且在建立信号处理程序的时候指定了SA_SIGINFO标志，那么该信号将被入列(如过实现支持排队信号)。信号处理程序会传送给一个siginfo结构，该结构的si_value字段被设置为sigev_value(如果使用了SA_SIGINFO标志).
+  * SIGEV_THREAD: 当异步I/O完成时，由sigev_notify_function字段指定的函数被调用。sigev_value字段被传入作为它的唯一参数。除非sigev_notify_attributes字段被设定为pthread属性结构的地址，且该结构指定了一个另外的线程属性，否则该函数将在分离状态下的一个单独线程中执行。
+  
+  在进行异步I/O之前需要先初始化AIO控制块，调用aio_read函数来进行异步读操作，或调用aio_write函数来进行异步写操作。
+```
+#include <aio.h>
+int aio_read(struct aiocb *aiocb); 
+int aio_write(struct aiocb *aiocb);
+    Both return: 0 if OK, −1 on error
+```
+
+  当这些函数返回成功时，异步I/O请求便已经被操作系统放入等待处理的队列中了。这些返回值与实际I/O结果没有任何关系。I/O操作在等待时，必须注意确保AIO控制块和数据库缓冲区保持稳定；它们下面对应的内存必须始终是合法的，除非I/O操作完成，否则不能被复用。
+  要想强制所有等待中的异步操作不等待而写入持久化的存储中，可以设立一个AIO控制块并调用aio_fsync函数。
+```
+#include <aio.h>
+int aio_fsync(int op, struct aiocb *aiocb);
+```
+  AIO控制块中的aio_fildes字段制定了其异步写操作被同步的文件。如果op参数设定为O_DSYNC,那么操作执行起来就会像调用了fdatasync一样。否则，如果op参数设定为O_SYNC， 那么操作执行起来就会像调用了fsync一样。
+  
+  像aio_read和aio_write函数一样，在安排了同步时，aio_fsync操作返回。在异步同步操作完成之前，数据不会被持久化。AIO控制块控制我们如何被通知，就像aio_read和aio_write函数一样。
+  
+  为了获知一个异步读、写或者同步操作的完成状态，需要调用aio_error函数。
+```
+#include <aio.h>
+int aio_error(const struct aiocb *aiocb);
+```
+  返回值为下面4种情况中的一种:
+  * 0: 异步操作成功完成。需要调用aio_return函数获取操作返回值。
+  * -1: 对aio_error的调用失败。这种情况下，errno会告诉我们为什么。
+  * EINPROGRESS: 异步读、写或同步操作仍在等待。
+  * 其他情况: 其他任何返回值时相关的异步操作失败返回的错误码。
+  
+  如果异步操作成功，可以调用aio_return函数来获取异步操作的返回值。
+```
+ssize_t aio_return(const struct aiocb *aiocb);
+```
+  直到异步操作完成之前，都需要小心不要调用aio_return函数。操作完成之前的结果是未定义的。还需要小心对每个异步操作只调用一次aio_return. 一旦调用了该函数，操作系统就可以释放掉包含了I/O操作返回值的记录。
+  
+  如果aio_return函数本身失败，会返回-1, 并设置errno. 其他情况下，它将返回异步操作的结果，即会返回read, write或者fsync在被成功调用时可能返回的结果。
+  
+  执行I/O操作时，如果还有其他事务需要处理而不想被I/O操作阻塞，就可以使用异步I/O.然而，如果在完成了所有事务时，还有异步操作未完成时，可以调用aio_suspend函数来阻塞进程，直到操作完成。
+  
+```
+#include <aio.h>
+int aio_suspend(const struct aiocb *const list[], int nent,
+const struct timespec *timeout);
+        Returns: 0 if OK, −1 on error
+```
+  aio_suspend可能会返回三种情况中的一种。如果我们被一个信号中断，它将会返回-1，并将errno设置为EINTR. 如果在没有任何I/O操作完成的情况下，阻塞的事件超过了函数中可选的timeout参数所指定的时间限制，那么aio_suspend将返回-1, 并将errno设置为EAGAIN(不想设置任何时间限制的话，可以把空指针传给timeout参数)。如果有任何I/O操作完成，aio_suspend将返回0.如果在我们调用aio_suspend操作时，所有的异步I/O操作都已完成，那么aio_suspend将在不阻塞的情况下直接返回。
+  
+  list参数时一个指向AIO控制块数组的指针，nent参数表明了数组中的条目数。数组中的空指针会被跳过，其他条目都必须指向已用于初始化异步I/O操作的AIO控制块。
+  
+  当还有我们不想再完成的等待中的异步I/O操作时，我们可以尝试使用aio_cancel函数来取消它们。
+  
+### 14.6 readv和writev函数
+
+### 14.7 readn和writen函数
+
+### 14.8 内存映射I/O
+
+### 14.9 总结
