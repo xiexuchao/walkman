@@ -320,16 +320,127 @@ child: got the lock, byte 1
 #### 14.3.3 锁的隐含继承和释放
   关于记录锁的自动继承和释放有3条规则。
   1. 锁与进程、文件两者相关联。这有两重含义: 第一很明显，当一个进程终止时，它所建立的锁全部释放；第二重意思就不很明显，任何时候关闭一个描述符时，则该进程通过这一描述符可以存访的文件上的任何一把锁都被释放(这些锁都是该进程设置的)。这意味着，如果执行下列四步:
-  <p>
   ```
   fd1 = open(pathname, ...);
   read_lock(fd1, ...);
   fd2 = dup(fd1);
   close(fd2);
-  ```
-  </p>
-  2. 
+  ``` 则在close(fd2)后，在fd1上设置的锁被释放。如果将dup代换为open,其效果也一样:`fd1 = open(pathname, ...); read_lock(fd1, ...); fd2 = open(pathname, ...); close(fd2);`
+  2. 由fork产生的子进程不继承父进程所设置的锁。这意味着，若一个进程得到一把锁，然后调用fork, 那么对于父进程获得的锁而言，子进程视为另一个进程.对于通过fork从父进程处继承过来的描述符，子进程需要调用fcntl获得它自己的锁。这个约束时有道理的，因为锁的作用时阻止多个进程同时写一个文件。如果子进程通过fork继承父进程的锁，则父进程和子进程都可以同时写一个文件。
+  3. 在执行exec后，新程序可以继承原执行程序的锁。但是注意，如果对一个文件描述符设置了执行时关闭标志，那么当作为exec的一部分关闭该文件描述符时，将释放相应文件的所有锁。
   
+#### 14.3.4 FreeBSD实现
+  先简要的观察FreeBSD实现中使用的数据结构。这会帮助我们进一步理解记录锁的自动继承和释放的第一条规则:锁与进程和文件两者相关联。
+  考虑一个进程，它执行下列语句(忽略出错返回):
+```
+fd1 = open(pathname, ...);
+write_lock(fd1, 0, SEEK_SET, 1); /* parent write locks byte 0 */
+if(fork() > 0) { /* parent process */
+  fd2 = dup(fd1);
+  fd3 = open(pathname, ...);
+  pause();
+} else {
+  read_lock(fd1, 1, SEEK_SET, 1); /* child read locks byte 1 */
+  pause();
+}
+```
+  下图显示了父进程和子进程暂停(执行pause())后的数据结构情况：
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/freebsd_lock_data_structure.png)
+  
+  前面已经给出了open、fork以及dup调用后数据结构(见图3-9和图8-2).有了记录锁后，在原来的这些图上新增了lockf结构，它们由i节点结构开始相互链接起来。每隔lockf结构描述了一个给定进程的一个加锁区域(由偏移量和长度定义的)。图中显示了两个lockf结构，一个是父进程调用write_lock形成的，另一个则是由子进程调用read_lock形成的。每一个结构都包含了相应的进程ID.
+  
+  实例: 下面程序中，我们了解到，守护进程可用一把文件锁来保证只有该守护进程的唯一副本在运行。
+```
+#include <unistd.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <syslog.h>
+#include <string.h>
+#include <errno.h>
+#include <stdio.h>
+#include <sys/stat.h>
+
+#define LOCKFILE "/var/run/deamon.pid"
+#define LOCKMODE (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
+
+extern int lockfile(int);
+
+int already_running(void)
+{
+    int fd; 
+    char buf[16];
+
+    fd = open(LOCKFILE, O_RDWR|O_CREAT, LOCKMODE);
+
+    if(fd < 0) {
+        syslog(LOG_ERR, "can't open %s: %s", LOCKFILE, strerror(errno));
+        exit(1);
+    }   
+
+    if(lockfile(fd) < 0) {
+        if(errno == EACCES || errno == EAGAIN) {
+            close(fd);
+            return (1);
+        }   
+        syslog(LOG_ERR, "can't open %s: %s", LOCKFILE, strerror(errno));
+        exit(1);
+    }   
+
+    ftruncate(fd, 0); 
+    sprintf(buf, "%ld", (long)getpid());
+    write(fd, buf, strlen(buf) + 1); 
+    return (0);
+}
+
+int
+lockfile(int fd) 
+{
+    struct flock fl; 
+    fl.l_type = F_WRLCK;
+    fl.l_start = 0;
+    fl.l_whence = SEEK_SET;
+    fl.l_len = 0;
+    return (fcntl(fd, F_SETLK, &fl));
+}
+```
+  另一种方法是使用write_lock来定义lockfile:
+  ```#define lockfile(fd) write_lock((fd), 0, SEEK_SET, 0)```.
+  
+#### 14.3.5 在文件尾端加锁
+  在相对于文件尾端的字节范围加锁或解锁时需要特别小心。大多数实现按照l_whence的SEEK_CUR或SEEK_END值，用l_start以及文件当前位置或当前长度得到绝对文件偏移量。但是，常常需要相对文件的当前长度指定一把锁，但又不能用fstat来得到当前文件长度，因为我们在该文件上没有锁。(在fstat和锁调用之间，可能会有另一个进程改变该文件的长度。)
+  考虑以下代码序列:
+```
+write_lock(fd, 0, SEEK_END, 0);
+write(fd, buf, 1);
+unlock(fd, 0, SEEK_END);
+write(fd, buf, 1);
+```
+  该代码序列所做的可能并不是你期望的。它得到一把写锁，该写锁从当前文件尾端起，包括以后可能追加写到该文件的任何数据。假定，该文件偏移量处于文件尾端时，执行第一个write, 这个操作将文件延伸了1个字节，而该字节将被加锁。跟随其后的是解锁操作，其作用是对以后追加写到文件上的数据不再加锁。但在其之前刚追加的一个字节则保留加锁状态。当执行第二个写时，文件尾端又延伸了1个字节，但该字节并未加锁。由此代码序列造成的文件锁状态如下图所示:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/file_lock_at_eof.png)
+  
+  当对文件的一部分加锁，内核将指定的偏移量变换成绝对文件偏移量。另外，除了指定一个绝对偏移量(SEEK_SET)之外，fcntl还允许我们相对文件中的某个点指定该偏移量，这个点是指当前偏移量(SEEK_CUR)或文件尾端(SEEK_END).当前偏移量和文件尾端可能会不断变化，而这种变化又不应该影响现有锁的状态，所以内核必须独立于当前文件偏移量或文件尾端而记住锁。
+  如果相解除锁中包括第一次write缩写的1个字节，那么应该指定长度为-1. 负的长度表示在指定偏移量之前的字节数。
+  
+#### 14.3.6 建议性锁和强制性锁
+  考虑数据库访问例程库。如果该库中所有函数都以一致的方法处理记录锁，则称使用这些函数访问数据库的进程集为合作进程(cooperating process)。如果这些函数是唯一地用来访问数据库地函数，那么它们使用建议性锁是可行的。但是建议性锁并不能阻止对数据库文件有写权限的任何其他进程写这个数据库文件。不使用数据库访问例程协同一致的方法来访问数据库的进程是非合作进程。
+  
+  强制性锁会让内核检查每一个open, read和write，验证调用进程是否违背了正在访问的文件上的某一把锁。强制性锁有时也称为强迫方式锁(enforcement-mode locking).
+> 从图14-2可以看到，Linux 3.2.0和Solaris 10提供强制性记录锁，而FreeBSD和Mac OS X 10.6.8则不提供。强制性记录锁不是Single Unix Specification的组成部分。在Linux中，如果用户想要使用强制性锁，则需要在各个文件系统基础上用mount命令-o mand选项来打开该机制。
+
+  对一个特定文件打开起设置组ID位，关闭其组执行位便开启了对该文件的强制性锁机制. 因为当组执行位被关闭时，设置组ID位不再有意义，所以SVR3的设计者借用两者的这种组合来指定对一个文件的锁是强制性的而非建议性的。
+  
+  如果一个进程试图读(read)或写(write)一个强制性锁起作用的文件，而欲读写的部分又由其他进程加上了锁，此时会发生什么呢?对于这一问题的回答取决于3方面的因素: 操作类型(read或write)、其他进程持有锁的类型(读锁或写锁)以及read或write的描述符是阻塞的还是非阻塞的。下图列出了8种可能性:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/man_lock_relation_to_other_rw.png)
+  
+  除了上图的read和write函数，另一个进程持有的强制性锁也会对open函数产生影响。通常，即使正在打开的文件具有强制性锁，该open也会成功。随后的read或write依存于上图的规则。但是，如果欲打开的文件具有强制性记录锁(读锁或写锁)，而且open调用中的标志为O_TRUNC或O_CREAT，则不论是否指定O_NONBLOCK, open都立即出错返回，errno设置为EAGAIN.
+  
+> 只有Solaris对O_CREAT标志处理为出错。当打开一个具有强制性锁的文件时，Linux允许指定O_CREAT标志。对O_TRUNC标志产生open出错是有意义的，因为对于一个文件来讲，若另一个进程持有它的读锁或写锁，那么他就不能被截短为0.但是对O_CREAT标志在返回时设置出错就没有什么意义了，因为该标志表示，只有在该文件不存在时才创建，但由于另一个进程持有该文件的记录锁，所以该文件肯定是存在的。
+
+  这种open的锁冲突处理方式可能会导致令人惊异的结果。在开发本节习题的时候，我们曾编写过一个测试程序，它打开一个文件(其模式指定为强制性锁)，对该文件整体设置一把读锁，然后休眠一段时间。(回忆上图读锁应当阻止其他进程写文件)在这段休眠时间内，用某些典型的Unix系统程序和操作符对该文件进行处理，发现下列情况:
+  * 可用ed编辑器对该文件进行编辑操作，而且编辑结果可以协会磁盘！强制性记录锁根本不起作用。用某些Unix系统版本提供的系统调用跟踪特性，对ed操作进行跟踪分析发现，ed将内容写到一个临时文件中，然后删除原文件，最后将临时文件改名为原文件名。强制性锁机制对unlink函数没有影响，于是这一切发生了。
+ >aaa
+  * a 
+
 ### 14.4 I/O复用
 
 ### 14.5 select和pselect函数
