@@ -403,6 +403,7 @@ lockfile(int fd)
     return (fcntl(fd, F_SETLK, &fl));
 }
 ```
+
   另一种方法是使用write_lock来定义lockfile:
   ```#define lockfile(fd) write_lock((fd), 0, SEEK_SET, 0)```.
   
@@ -513,18 +514,23 @@ main(int argc, char **argv)
     exit(0);
 }
 ```
+
   此程序首先创建一个文件，并使强制性锁机制对其起作用。然后程序分出一个父进程和子进程。父进程对整个文件设置一把写锁，子进程则先将该文件描述符设置位非阻塞的，然后企图对该文件设置一把读锁，我们期望这会出错返回，并希望看到系统返回是EACCES或EAGAIN.接着子进程将文件读写位置调整到文件开头，并试图读该文件。如果系统提供强制性锁机制，则read应该返回EACCES或EAGAIN(因为该描述符是非阻塞的)，否则read返回所读的数据。在Solaris 10上运行，是可以看到如下结果(支持强制性锁机制)：
+  
 ```
 $ ./a.out temp.lock
 read_lock of already-locked region returns 11
 read failed (mandatory locking works): Resource temporarily unavailable
 ```
+
   查看系统头文件或intro(2)手册页，可以看到errno11对应于EAGAIN. 若在FreeBSD或mac上可以得到下面结果:
+  
 ```
 bogon:advio apple$ ./tmplock temp.lock
 read_lock of already-locked region returns 35
 read OK (no mandatory locking), buf = ab
 ```
+
   其中errno值为35对应于EAGAIN. 该系统不支持强制性锁。
   
   让我们回到本节的第一个问题:当两个人同时编辑同一个文件将会怎样呢?一般的UNIX文本编辑器并不使用记录锁,所以对此问题的回答仍然是:该文件的最后结果取决于写该文件的最后一个进程。
@@ -540,6 +546,7 @@ while((n = read(STDIN_FILENO, buf, BUFFSIZ)) > 0)
   if(write(STDOUT_FILENO, buf, n) != n)
     err_sys("write error");
 ```
+
   这种形式的阻塞I/O随处可见。但是如果必须从两个描述符读，又将如何呢? 在这种情况下，我们不能在任一个描述符上进行阻塞读(read)，否则可能会因为被阻塞在一个描述符的读操作上导致另一个描述符即使有数据也无法处理。所以为了处理这种情况需要另一种不同的技术。
   让我们观察telnet(1)命令的结构。该程序从终端(标准输入)读，将所得数据写到网络连接上同时从网络连接读，将所得数据写到终端上(标准输出)。在网络连接的另一端，telnetd守护进程读用户键入的命令，并将所读到的送给shell,这如同用户登录到远程机器上一样。telnetd守护进程将执行用户键入命令而产生的输出通过telnet命令送回给用户，并显示在用户终端上。下图显示了这种工作情景:
   ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/overview_telnet.png)
