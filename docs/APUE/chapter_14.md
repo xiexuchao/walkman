@@ -319,13 +319,7 @@ child: got the lock, byte 1
   
 #### 14.3.3 锁的隐含继承和释放
   关于记录锁的自动继承和释放有3条规则。
-  1. 锁与进程、文件两者相关联。这有两重含义: 第一很明显，当一个进程终止时，它所建立的锁全部释放；第二重意思就不很明显，任何时候关闭一个描述符时，则该进程通过这一描述符可以存访的文件上的任何一把锁都被释放(这些锁都是该进程设置的)。这意味着，如果执行下列四步:
-  ```
-  fd1 = open(pathname, ...);
-  read_lock(fd1, ...);
-  fd2 = dup(fd1);
-  close(fd2);
-  ``` 则在close(fd2)后，在fd1上设置的锁被释放。如果将dup代换为open,其效果也一样:`fd1 = open(pathname, ...); read_lock(fd1, ...); fd2 = open(pathname, ...); close(fd2);`
+  1. 锁与进程、文件两者相关联。这有两重含义: 第一很明显，当一个进程终止时，它所建立的锁全部释放；第二重意思就不很明显，任何时候关闭一个描述符时，则该进程通过这一描述符可以存访的文件上的任何一把锁都被释放(这些锁都是该进程设置的)。这意味着，如果执行下列四步:`fd1 = open(pathname, ...);read_lock(fd1, ...); fd2 = dup(fd1); close(fd2);` 则在close(fd2)后，在fd1上设置的锁被释放。如果将dup代换为open,其效果也一样:`fd1 = open(pathname, ...); read_lock(fd1, ...); fd2 = open(pathname, ...); close(fd2);`
   2. 由fork产生的子进程不继承父进程所设置的锁。这意味着，若一个进程得到一把锁，然后调用fork, 那么对于父进程获得的锁而言，子进程视为另一个进程.对于通过fork从父进程处继承过来的描述符，子进程需要调用fcntl获得它自己的锁。这个约束时有道理的，因为锁的作用时阻止多个进程同时写一个文件。如果子进程通过fork继承父进程的锁，则父进程和子进程都可以同时写一个文件。
   3. 在执行exec后，新程序可以继承原执行程序的锁。但是注意，如果对一个文件描述符设置了执行时关闭标志，那么当作为exec的一部分关闭该文件描述符时，将释放相应文件的所有锁。
   
@@ -403,6 +397,7 @@ lockfile(int fd)
     return (fcntl(fd, F_SETLK, &fl));
 }
 ```
+
   另一种方法是使用write_lock来定义lockfile:
   ```#define lockfile(fd) write_lock((fd), 0, SEEK_SET, 0)```.
   
@@ -513,18 +508,23 @@ main(int argc, char **argv)
     exit(0);
 }
 ```
+
   此程序首先创建一个文件，并使强制性锁机制对其起作用。然后程序分出一个父进程和子进程。父进程对整个文件设置一把写锁，子进程则先将该文件描述符设置位非阻塞的，然后企图对该文件设置一把读锁，我们期望这会出错返回，并希望看到系统返回是EACCES或EAGAIN.接着子进程将文件读写位置调整到文件开头，并试图读该文件。如果系统提供强制性锁机制，则read应该返回EACCES或EAGAIN(因为该描述符是非阻塞的)，否则read返回所读的数据。在Solaris 10上运行，是可以看到如下结果(支持强制性锁机制)：
+  
 ```
 $ ./a.out temp.lock
 read_lock of already-locked region returns 11
 read failed (mandatory locking works): Resource temporarily unavailable
 ```
+
   查看系统头文件或intro(2)手册页，可以看到errno11对应于EAGAIN. 若在FreeBSD或mac上可以得到下面结果:
+  
 ```
 bogon:advio apple$ ./tmplock temp.lock
 read_lock of already-locked region returns 35
 read OK (no mandatory locking), buf = ab
 ```
+
   其中errno值为35对应于EAGAIN. 该系统不支持强制性锁。
   
   让我们回到本节的第一个问题:当两个人同时编辑同一个文件将会怎样呢?一般的UNIX文本编辑器并不使用记录锁,所以对此问题的回答仍然是:该文件的最后结果取决于写该文件的最后一个进程。
@@ -540,6 +540,7 @@ while((n = read(STDIN_FILENO, buf, BUFFSIZ)) > 0)
   if(write(STDOUT_FILENO, buf, n) != n)
     err_sys("write error");
 ```
+
   这种形式的阻塞I/O随处可见。但是如果必须从两个描述符读，又将如何呢? 在这种情况下，我们不能在任一个描述符上进行阻塞读(read)，否则可能会因为被阻塞在一个描述符的读操作上导致另一个描述符即使有数据也无法处理。所以为了处理这种情况需要另一种不同的技术。
   让我们观察telnet(1)命令的结构。该程序从终端(标准输入)读，将所得数据写到网络连接上同时从网络连接读，将所得数据写到终端上(标准输出)。在网络连接的另一端，telnetd守护进程读用户键入的命令，并将所读到的送给shell,这如同用户登录到远程机器上一样。telnetd守护进程将执行用户键入命令而产生的输出通过telnet命令送回给用户，并显示在用户终端上。下图显示了这种工作情景:
   ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/overview_telnet.png)
