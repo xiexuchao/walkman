@@ -438,11 +438,118 @@ write(fd, buf, 1);
 
   这种open的锁冲突处理方式可能会导致令人惊异的结果。在开发本节习题的时候，我们曾编写过一个测试程序，它打开一个文件(其模式指定为强制性锁)，对该文件整体设置一把读锁，然后休眠一段时间。(回忆上图读锁应当阻止其他进程写文件)在这段休眠时间内，用某些典型的Unix系统程序和操作符对该文件进行处理，发现下列情况:
   * 可用ed编辑器对该文件进行编辑操作，而且编辑结果可以协会磁盘！强制性记录锁根本不起作用。用某些Unix系统版本提供的系统调用跟踪特性，对ed操作进行跟踪分析发现，ed将内容写到一个临时文件中，然后删除原文件，最后将临时文件改名为原文件名。强制性锁机制对unlink函数没有影响，于是这一切发生了。
- >aaa
-  * a 
+  * 不能用vi编辑器编辑该文件。vi可以读该文件内容，但是如果试图将新的数据写到该文件中，就会出错返回EAGAIN. 如果试图将新数据追加写到该文件中，则write阻塞。vi的这种行为与我们希望的一样。
+  * 使用Korn shell的>和>>操作符重写或追加该文件，会产生出错信息"cannot create".
+  * 在Bourne shell下使用>也会出错，但是使用>>操作符时只阻塞，在解除强制性锁后会继续处理。(这两种shell在执行追加写操作时之所以会产生差异，时因为Korn shell以O_CREAT和O_APPEND标志打开文件，而上面已提及O_CREAT会产生出错返回。但是Bourne shell在该文件已经存在时并不指定O_CREAT，所以open成功，而下一个write则阻塞。)
+  
+  产生的结果随所用操作系统版本不同而不同。从这样一个习题可中可见，在使用强制性锁时还需要警惕。从ed实例可以看出，强制性锁时可以设法避开的。
+
+  一个恶意的用户可以使用强制性记录锁，对大家都可读的文件加一把写锁，这样就能阻止任何人写该文件(当然，该文件应当时强制性锁机制起作用的，这可能要求该用户能够更改该文件的权限位)。考虑一个数据库文件，它是大家都可读的，并且时强制性锁机制起作用的。如果一个恶意用户要对整个文件持有一把读锁，其他进程就不能再写该文件了。
+  
+  实例: 写一个程序确定系统是否支持强制性锁。
+```
+#include "apue.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+
+int
+main(int argc, char **argv)
+{
+    int fd;
+    pid_t pid;
+    char buf[15];
+    struct stat statbuf;
+
+    if(argc != 2) {
+        fprintf(stderr, "usage: %s filename\n", argv[0]);
+        exit(1);
+    }   
+
+    if((fd = open(argv[1], O_RDWR | O_CREAT | O_TRUNC, FILE_MODE)) < 0)
+        err_sys("open error");
+
+    if(write(fd, "abcdef", 6) != 6)
+        err_sys("write error");
+
+    /** turn on set-group-ID and turn off group-execute **/
+    if(fstat(fd, &statbuf) < 0)
+        err_sys("fstat error");
+
+    if(fchmod(fd, (statbuf.st_mode & ~S_IXGRP) | S_ISGID) < 0)
+        err_sys("fchmod error");
+
+    TELL_WAIT();
+    if((pid = fork()) < 0) {
+        err_sys("fork error");
+    } else if (pid > 0) { /** parent process **/
+        /** write lock entire file **/
+        if(write_lock(fd, 0, SEEK_SET, 0) < 0)
+            err_sys("write_lock error");
+
+        TELL_CHILD(pid);
+
+        if(waitpid(pid, NULL, 0) < 0)
+            err_sys("waitpid error");
+    } else {
+        WAIT_PARENT(); /** wait for parent to set lock **/
+        set_fl(fd, O_NONBLOCK);
+
+        /** first let's see what error we get if region is locked **/
+        if(read_lock(fd, 0, SEEK_SET, 0) != -1) /** no wait **/
+            err_sys("child: read_lock succeeded");
+        printf("read_lock of already-locked region returns %d\n", errno);
+
+        /** now try to read the mandatory locked file **/
+        if(lseek(fd, 0, SEEK_SET) == -1)
+            err_sys("lseek error");
+        if(read(fd, buf, 2) < 0)
+            err_ret("read failed (mandatory locking works)");
+        else
+            printf("read OK (no mandatory locking), buf = %2.2s\n", buf);
+    }
+
+    exit(0);
+}
+```
+  此程序首先创建一个文件，并使强制性锁机制对其起作用。然后程序分出一个父进程和子进程。父进程对整个文件设置一把写锁，子进程则先将该文件描述符设置位非阻塞的，然后企图对该文件设置一把读锁，我们期望这会出错返回，并希望看到系统返回是EACCES或EAGAIN.接着子进程将文件读写位置调整到文件开头，并试图读该文件。如果系统提供强制性锁机制，则read应该返回EACCES或EAGAIN(因为该描述符是非阻塞的)，否则read返回所读的数据。在Solaris 10上运行，是可以看到如下结果(支持强制性锁机制)：
+```
+$ ./a.out temp.lock
+read_lock of already-locked region returns 11
+read failed (mandatory locking works): Resource temporarily unavailable
+```
+  查看系统头文件或intro(2)手册页，可以看到errno11对应于EAGAIN. 若在FreeBSD或mac上可以得到下面结果:
+```
+bogon:advio apple$ ./tmplock temp.lock
+read_lock of already-locked region returns 35
+read OK (no mandatory locking), buf = ab
+```
+  其中errno值为35对应于EAGAIN. 该系统不支持强制性锁。
+  
+  让我们回到本节的第一个问题:当两个人同时编辑同一个文件将会怎样呢?一般的UNIX文本编辑器并不使用记录锁,所以对此问题的回答仍然是:该文件的最后结果取决于写该文件的最后一个进程。
+  (4.3+BSD的vi编辑器确实有一个编译选择项使运行时建议性记录锁起作用,但是这一选择项并不是默认可用的。)即使我们在一个编辑器,例如vi中使用了建议性锁,可是这把锁并不能阻止其他用户使用另一个没有使用建议性记录锁的编辑器。
+
+  若系统提供强制性记录锁,那么可以修改常用的编辑器(如果有该编辑器的源代码)。如没有该编辑器的源代码,那么可以试一试下述方法。编写一个vi的前端程序。该程序立即调用fork,然后父进程等待子进程终止,子进程打开在命令行中指定的文件,使强制性锁起作用,对整个文件设置一把写锁,然后运行vi。在vi运行时,该文件是加了写锁的,所以其他用户不能修改它。当vi结束时,父进程从wait返回,此时自编的前端程序也就结束。
+  本例中假定锁能跨越exec,这正是前面所说的SVR4的情况(SVR4是提供强制性锁的唯一系统)。这种类型的前端程序是可以编写的,但却往往不能起作用。问题出在大多数编辑器(至少是vi和ed)读它们的输入文件,然后关闭它。只要引用被编辑文件的描述符关闭了,那么加在该文件上的锁就被释放了。这意味着,在编辑器读了该文件的内容,然后关闭了它,那么锁也就不存在了。前端程序中没有任何方法可以阻止这一点。
 
 ### 14.4 I/O复用
-
+  当从一个描述符读，然后又写到另一个描述符，可以在下列形式的循环中使用阻塞I/O:
+```
+while((n = read(STDIN_FILENO, buf, BUFFSIZ)) > 0)
+  if(write(STDOUT_FILENO, buf, n) != n)
+    err_sys("write error");
+```
+  这种形式的阻塞I/O随处可见。但是如果必须从两个描述符读，又将如何呢? 在这种情况下，我们不能在任一个描述符上进行阻塞读(read)，否则可能会因为被阻塞在一个描述符的读操作上导致另一个描述符即使有数据也无法处理。所以为了处理这种情况需要另一种不同的技术。
+  让我们观察telnet(1)命令的结构。该程序从终端(标准输入)读，将所得数据写到网络连接上同时从网络连接读，将所得数据写到终端上(标准输出)。在网络连接的另一端，telnetd守护进程读用户键入的命令，并将所读到的送给shell,这如同用户登录到远程机器上一样。telnetd守护进程将执行用户键入命令而产生的输出通过telnet命令送回给用户，并显示在用户终端上。下图显示了这种工作情景:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/overview_telnet.png)
+  
+  telnet进程有两个输入，两个输出。我们不能对两个输入中的任何一个使用阻塞read,因为我们不知道到底哪一个输入会得到数据。
+  
+  处理这种特殊问题的一种方法是:将一个进程变成两个进程(用fork),每个进程处理一跳数据通路。下图显示了这种安排。System V的uucp通信包提供了cu(1)命令，其结构与此相似。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/telnet_with_2processes.png)
+  
+  
 ### 14.5 select和pselect函数
 
 ### 14.6 poll函数
