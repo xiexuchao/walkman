@@ -40,4 +40,115 @@ AIO详解
   
   下一节将深入介绍这种模型，探索这种模型使用的API，然后展示几个命令。
   
+### 异步I/O动机
+  从前面I/O模型的分类中，我们可以看出AIO的动机。
+  * 阻塞模型需要在I/O操作开始时阻塞应用程序。这意味着不可能同时重叠进行处理和I/O操作。 
+  * 同步非阻塞模型允许处理和I/O重叠，但是这需要应用程序根据重现的规则来检查I/O操作的状态。
+  * 剩下的就是异步非阻塞I/O了，它允许处理和I/O操作重叠进行，包括I/O操作完成的通知。
+  
+  总结: 阻塞就不能同时进行处理和I/O. 同步非阻塞可以同时进行处理和I/O, 但需要应用程序自己去检查I/O操作的状态。
+  异步非阻塞能同时进行处理和I/O, 同时也会在I/O就绪时通知应用程序。
+
+  除了需要阻塞之外，select函数所提供的功能(异步阻塞I/O)与AIO类似。不过，它是通过对通知事件进行阻塞，而不是对I/O调用进行阻塞。
+  
+  还有考虑同时进行处理和I/O操作，是基于CPU处理能力和磁盘的读写能力不在一个量级上。CPU处理能力远远高于磁盘读写能力。
+  
+### Linux上的AIO简介
+  本节将探索Linux的异步I/O模型，从而帮助我们理解如何在应用程序中使用这种技术。
+  
+  在传统的I/O模型中，有一个使用唯一句柄标识的I/O通道。在Unix中，这些句柄是文件描述符(这对等同于文件、管道、套接字等等)。在阻塞I/O中，我们发起了一次传输操作，当传输操作完成或发生错误时，系统调用会返回。
+  
+  在异步非阻塞I/O中，我们可以同时发起多个传输操作。这需要每隔传输操作都有唯一的上下文，这样我们才能在它们完成时区分到底是哪个传输操作完成了。在AIO中，这是一个aiocb(AIO I/O Control Block)结构。这个结构包含了有关传输的所有信息，包括为数据准备的用户缓冲区。在产生I/O(称为完成)通知时，aiocb结构就被用来唯一标识所完成的I/O操作。这个API展示显示了如何使用它。
+  
+### AIO API
+  AIO接口的API非常简单，但是它为数据传输提供了必须的功能，并给出了两个不同的通知模型。 表1给出了AIO的接口函数，本节稍后会更详细进行介绍。
+  
+### AIO API list
+  * aio_read: 请求异步读操作
+  * aio_error: 检查异步请求的状态
+  * aio_return: 获得完成的异步请求的返回状态
+  * aio_write: 请求异步写操作
+  * aio_suspend: 挂起调用进程，直到一个或多个异步请求已经完成(或失败)
+  * aio_cancel: 取消异步I/O请求
+  * lio_listio: 发起一系列I/O操作
+  
+  每个API函数都使用aiocb结构开始或检查。这个结构有很多元素，但是清单1仅仅给出了需要(或可以)使用的元素。
+```
+/** aiocb structure **/
+struct aiocb{
+  int aio_fildes;
+  int aio_lio_opcode;
+  volatile void *aio_buf;
+  size_t aio_nbytes;
+  struct sigevent aio_sigevent;
+  
+  /** Internal fields **/
+}
+```
+  sigevent结构告诉AIO在I/O操作完成时应该执行什么操作。我们将在AIO的展示中对这个结构进行探索。现在我们将展示各个AIO的API函数是如何工作的，以及我们应该如何使用它们。
+
+#### aio_read
+  aio_read函数请求对一个有效的文件描述符进行异步读操作。这个文件描述符可以表示一个文件、套接字甚至管道。aio_read函数的原型如下: `int aio_read(struct aiocb *aiocb)`;
+  aio_read函数在请求进行排队之后立即返回。如果执行成功，返回值就为0；如果出现错误，返回值就为-1, 并设置errno的值。
+  要执行读操作，应用程序必须对aiocb结构进行初始化。下面这个简短的例子就展示了如何填充aiocb请求结构，并使用aio_read来执行异步读请求(现在暂时忽略通知)操作。它还展示了aio_error的用法，不过我们将稍后再做解释。
+  
+```
+#include <aio.h>
+
+...
+
+int fd, ret;
+struct aiocb my_aiocb;
+fd = open("file.txt", O_RDONLY);
+if(fd < 0) perror("open");
+
+/** Zero out the aiocb structure (recommended) **/
+bzero((char *)&my_aiocb, sizeof(struct aiocb));
+
+/** Allocate ad data buffer for the aiocb request **/
+my_aiocb.aio_buf = malloc(BUFSIZE + 1);
+
+if(!my_aiocb.aio_buf) perror("malloc");
+
+/** Initialize the neccessary fields in the aiocb **/
+my_aiocb.aio_fildes = fd;
+my_aiocb.aio_nbytes = BUFSIZE;
+my_aiocb.aio_offset = 0;
+
+ret = aio_read(&my_aiocb);
+if(ret < 0) perror("aio_read");
+
+while(aio_error(&my_aiocb) == EINPROGRESS);
+
+if((ret = aio_return(&my_aiocb)) > 0) {
+  /** got ret bytes on the read **/
+} else {
+  /** read failed, consult errno **/
+}
+```
+  在上面代码中，在打开要从中读取数据的文件之后，我们就清空了aiocb结构，然后分配一个数据缓冲区。并将对这个数据缓冲区的引用放到aio_buf中，然后，我们将aio_nbytes初始化成缓冲区的大小。并将aio_offset设置成0(该文件中的第一个偏移量)。我们将aio_fildes设置为从中读取数据的文件描述符。在设置这些域之后，就调用aio_read请求进行读操作。然后我们可以调用aio_error来确定aio_read的状态。只要状态是EINPROGRESS, 就一直忙碌等待，直到状态发生变化为止。现在，请求可能成功，可能失败。
+  
+  注意使用这个API与标准的函数从文件读取内容是非常相似的。除了aio_read的一些异步特性之外，另外一个区别是读操作偏移量的设置。在传统的read调用中，偏移量是在文件描述符上下文件中进行维护的。对于每隔读操作来说，偏移量都需要进行更新，这样后续的操作此阿能对下一块数据进行殉职。对于异步I/O操作来说这是不可能的，因为我们可以同时执行很多读请求，因此必须为每个特定的读请求都指定偏移量。
+  
+#### aio_error
+  aio_error函数被用来确定请求的状态。其原型如下:`int aio_error(struct aiocb *aiocbp)`;
+  这个函数可以返回以下内容:
+  * EINPROGRESS: 说明请求尚未完成
+  * ECANCELLED: 说明请求被应用程序取消了
+  * -1: 说明发生了错误，具体错误原因可查阅errno
+  
+#### aio_return
+  异步I/O和标准块I/O之间的另外一个区别是我们不能立即访问这个函数的返回状态，因为我们没有阻塞在read调用上。在标准的read调用中，返回状态是在该函数返回时提供的。但是在异步I/O中，我们要使用aio_return函数。这个函数的原型如下:`ssize_t aio_return(struct aiocb *aiocb);`
+
+  只有在aio_error调用确定请求已经完成(可能完成，也可能发生了错误)之后，才会调用这个函数。aio_return的返回值就等价于同步情况read和write系统调用的返回值(所传输的字节数，如果发生错误，返回值就为-1).
+  
+#### aio_write
+  aio_write函数用来请求一个异步写操作。其函数原型如下:`int aio_write(struct aiocb *aiocb);`
+  aio_write函数会立即返回，说明请求已经进行排队(成功返回值为0，失败时返回值为-1, 并相应的设置errno).
+  
+  这与read系统调用类似，但是有一点不一样的行为需要注意。回想一下对于read调用来说，要使用的偏移量时非常重要的。然而，对于write来说，这个偏移量只有在没有设置O_APPEND选项的文件上下文中才会非常重要。如果设置了O_APPEND, 那么这个偏移量就会被忽略，数据都会被附加到文件的末尾。否则，aio_offset域就确定了数据要写入的文件中的偏移量。
+  
+#### aio_suspend
+  我们可以执行aio_suspend函数来挂起(或阻塞)调用进程，直到异步请求完成为止，此时会产生一个信号，或者发生其他超时操作。调用者提供了一个aiocb引用列表，其中任何一个完成都会导致aio_suspend返回。aio_suspend的函数原型如下:`int aio_suspend(const struct aiocb *const cblist[], int n, const struct timespec *timeout)`
+  
   
