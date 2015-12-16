@@ -859,7 +859,228 @@ int lio_listio(int mode, struct aiocb *restrict const list[restrict], int nent, 
   
   下面的程序是使用20世纪80年代流行的USENET新闻系统中使用的ROT-13算法，翻译文件，该算法原本用于将文本中带有侵犯性的或含有剧透和笑话笑点部分的文本模糊化。该算法将文本中的英文字符a~z和A~Z分别循环向右移13个字母位移，但步改变其他字符。
   
+```
+#include "apue.h"
+#include <ctype.h>
+#include <fcntl.h>
+
+#define BSZ 4096
+
+unsigned char buf[BSZ];
+
+unsigned char
+translate(unsigned char c)
+{
+    if(isalpha(c)) {
+        if(c >= 'n')
+            c -= 13; 
+        else if(c >= 'a')
+            c += 13; 
+        else if(c >= 'N')
+            c -= 13; 
+        else
+            c += 13; 
+    }   
+
+    return (c);
+}
+
+int main(int argc, char **argv)
+{
+    int ifd, ofd, i, n, nw; 
+    if(argc != 3)
+        err_quit("usage: rot13 infile outfile");
+
+    if((ifd = open(argv[1], O_RDONLY)) < 0)
+        err_sys("can't open %s", argv[1]);
+
+    if((ofd = open(argv[2], O_RDWR | O_CREAT | O_TRUNC, FILE_MODE)) < 0)
+        err_sys("can't create %s", argv[2]);
+
+    while((n = read(ifd, buf, BSZ)) > 0) {
+        for(i = 0; i < n; i++)
+            buf[i] = translate(buf[i]);
+
+        if((nw = write(ofd, buf, n)) != n) {
+            if(nw < 0)
+                err_sys("write failed");
+            else
+                err_quit("short write (%d/%d)", nw, n); 
+        }   
+    }   
+
+    fsync(ofd);
+    exit(0);
+}
+```
+  程序中的I/O部分是很直接的: 从输入文件中读取一个块，翻译之，然后再把这个块写到输出文件中。重复该步骤直到遇到文件尾端,read返回0. 下面是等价的异步I/O函数做同样的任务.
   
+```
+#include "apue.h"                                                                      
+#include <ctype.h>                                                                     
+#include <fcntl.h>                                                                     
+#include <aio.h>                                                                       
+#include <errno.h>                                                                     
+#include <sys/stat.h>                                                                  
+                                                                                       
+#define BSZ 4096                                                                       
+#define NBUF 8                                                                         
+                                                                                       
+enum rwop {                                                                            
+    UNUSED = 0,                                                                        
+    READ_PENDING = 1,                                                                  
+    WRITE_PENDING = 2                                                                  
+};                                                                                     
+                                                                                       
+struct buf {                                                                           
+    enum rwop     op;                                                                  
+    int           last;                                                                
+    struct aiocb  aiocb;                                                               
+    unsigned char data[BSZ];                                                           
+};                                                                                     
+                                                                                       
+struct buf bufs[NBUF];                                                                 
+                                                                                       
+unsigned char                                                                          
+translate(unsigned char c)                                                             
+{                                                                                      
+    /* same as before */                                                               
+    if (isalpha(c)) {                                                                  
+        if (c >= 'n')                                                                  
+            c -= 13;                                                                   
+        else if (c >= 'a')                                                             
+            c += 13;                                                                   
+        else if (c >= 'N')                                                             
+            c -= 13;                                                                   
+        else                                                                           
+            c += 13;                                                                   
+    }                                                                                  
+    return(c);                                                                         
+}                                     
+
+int
+main(int argc, char* argv[])
+{
+    int                    ifd, ofd, i, j, n, err, numop;
+    struct stat            sbuf;
+    const struct aiocb    *aiolist[NBUF];
+    off_t                off = 0;
+
+    if (argc != 3)
+        err_quit("usage: rot13 infile outfile");
+    if ((ifd = open(argv[1], O_RDONLY)) < 0)
+        err_sys("can't open %s", argv[1]);
+    if ((ofd = open(argv[2], O_RDWR|O_CREAT|O_TRUNC, FILE_MODE)) < 0)
+        err_sys("can't create %s", argv[2]);
+    if (fstat(ifd, &sbuf) < 0)
+        err_sys("fstat failed");
+
+    /* initialize the buffers */
+    for (i = 0; i < NBUF; i++) {
+        bufs[i].op = UNUSED;
+        bufs[i].aiocb.aio_buf = bufs[i].data;
+        bufs[i].aiocb.aio_sigevent.sigev_notify = SIGEV_NONE;
+        aiolist[i] = NULL;
+    }
+    
+    
+    numop = 0;
+    for (;;) {
+        for (i = 0; i < NBUF; i++) {
+            switch (bufs[i].op) {
+            case UNUSED:
+                /*
+                 * Read from the input file if more data
+                 * remains unread.
+                 */
+                if (off < sbuf.st_size) {
+                    bufs[i].op = READ_PENDING;
+                    bufs[i].aiocb.aio_fildes = ifd;
+                    bufs[i].aiocb.aio_offset = off;
+                    off += BSZ;
+                    if (off >= sbuf.st_size)
+                        bufs[i].last = 1;
+                    bufs[i].aiocb.aio_nbytes = BSZ;
+                    if (aio_read(&bufs[i].aiocb) < 0)
+                        err_sys("aio_read failed");
+                    aiolist[i] = &bufs[i].aiocb;
+                    numop++;
+                }
+                break;
+            case READ_PENDING:
+                if ((err = aio_error(&bufs[i].aiocb)) == EINPROGRESS)
+                    continue;
+                if (err != 0) {
+                    if (err == -1)
+                        err_sys("aio_error failed");
+                    else
+                        err_exit(err, "read failed");
+                }
+
+                /*
+                 * A read is complete; translate the buffer
+                 * and write it.
+                 */
+                if ((n = aio_return(&bufs[i].aiocb)) < 0)
+                    err_sys("aio_return failed");
+                if (n != BSZ && !bufs[i].last)
+                    err_quit("short read (%d/%d)", n, BSZ);
+                for (j = 0; j < n; j++)
+                    bufs[i].data[j] = translate(bufs[i].data[j]);
+                bufs[i].op = WRITE_PENDING;
+                bufs[i].aiocb.aio_fildes = ofd;
+                bufs[i].aiocb.aio_nbytes = n;
+                if (aio_write(&bufs[i].aiocb) < 0)
+                    err_sys("aio_write failed");
+                /* retain our spot in aiolist */
+                break;
+            case WRITE_PENDING:
+                if ((err = aio_error(&bufs[i].aiocb)) == EINPROGRESS)
+                    continue;
+                if (err != 0) {
+                    if (err == -1)
+                        err_sys("aio_error failed");
+                    else
+                        err_exit(err, "write failed");
+                }
+
+                /*
+                 * A write is complete; mark the buffer as unused.
+                 */
+                if ((n = aio_return(&bufs[i].aiocb)) < 0)
+                    err_sys("aio_return failed");
+                if (n != bufs[i].aiocb.aio_nbytes)
+                    err_quit("short write (%d/%d)", n, BSZ);
+                aiolist[i] = NULL;
+                bufs[i].op = UNUSED;
+                numop--;
+                break;
+            }
+        }
+        if (numop == 0) {
+            if (off >= sbuf.st_size)
+                break;
+        } else {
+            if (aio_suspend(aiolist, NBUF, NULL) < 0)
+                err_sys("aio_suspend failed");
+        }
+    }
+
+    bufs[0].aiocb.aio_fildes = ofd;
+    if (aio_fsync(O_SYNC, &bufs[0].aiocb) < 0)
+        err_sys("aio_fsync failed");
+    exit(0);
+}
+```
+  我们使用了8个缓冲区，因此可以有最多8个异步I/O请求处于等待状态。令人惊讶的是，实际上这可能会降低性能，因为如果读操作是以无需的方式提交给文件系统的，操作系统提前读的算法便会失效。
+  
+  在检查操作的返回值之前，必须确认操作已经完成。当aio_error返回的值既非EINPROGRESS亦非-1时，表明操作完成。除了这些值之外，如果返回值是0以外的任何值，说明操作失败了。一旦检查过这些情况，便可以安全的调用aio_return来获取i/O操作的返回值来。
+  
+  只要还有事情要做，就可以提交异步I/O操作。当存在为使用的AIO控制块时，可以提交一个异步读操作，读操作完成后，编译缓冲区中的内容并将它提交给一个异步写请求。当所有AIO控制块都在使用中时，通过调用aio_suspend等待操作完成。
+  把一个块写入输出文件时，我们保留了在从输入文件读取数据时的偏移量。因而写的顺序并不重要。这一策略仅在输入文件中每隔字符和输出文件中对应的字符偏移量相同的情况下适用，我们在输出文件中国年既没有添加字符也没有删除字符。
+  
+  这个实例中并没有使用异步通知，因为使用同步编程模型更加简单。如果在I/O操作进行时还有别的事情要做，那么额外的工作可以包含在for循环当中。然而，如果需要阻止这些额外工作延迟翻译文件的任务，那么就需要组织下代码使用异步通知。多任务情况下，决定程序如何构建之前需要先考虑各个任务的优先级。
+
   
 ### 14.6 readv和writev函数
 
