@@ -1072,22 +1072,142 @@ main(int argc, char* argv[])
     exit(0);
 }
 ```
-  我们使用了8个缓冲区，因此可以有最多8个异步I/O请求处于等待状态。令人惊讶的是，实际上这可能会降低性能，因为如果读操作是以无需的方式提交给文件系统的，操作系统提前读的算法便会失效。
+  我们使用了8个缓冲区，因此可以有最多8个异步I/O请求处于等待状态。令人惊讶的是，实际上这可能会降低性能，因为如果读操作是以无序的方式提交给文件系统的，操作系统提前读的算法便会失效。
   
   在检查操作的返回值之前，必须确认操作已经完成。当aio_error返回的值既非EINPROGRESS亦非-1时，表明操作完成。除了这些值之外，如果返回值是0以外的任何值，说明操作失败了。一旦检查过这些情况，便可以安全的调用aio_return来获取i/O操作的返回值来。
   
   只要还有事情要做，就可以提交异步I/O操作。当存在为使用的AIO控制块时，可以提交一个异步读操作，读操作完成后，编译缓冲区中的内容并将它提交给一个异步写请求。当所有AIO控制块都在使用中时，通过调用aio_suspend等待操作完成。
-  把一个块写入输出文件时，我们保留了在从输入文件读取数据时的偏移量。因而写的顺序并不重要。这一策略仅在输入文件中每隔字符和输出文件中对应的字符偏移量相同的情况下适用，我们在输出文件中国年既没有添加字符也没有删除字符。
+  
+  把一个块写入输出文件时，我们保留了在从输入文件读取数据时的偏移量。因而写的顺序并不重要。这一策略仅在输入文件中每个字符和输出文件中对应的字符偏移量相同的情况下适用，我们在输出文件中既没有添加字符也没有删除字符。
   
   这个实例中并没有使用异步通知，因为使用同步编程模型更加简单。如果在I/O操作进行时还有别的事情要做，那么额外的工作可以包含在for循环当中。然而，如果需要阻止这些额外工作延迟翻译文件的任务，那么就需要组织下代码使用异步通知。多任务情况下，决定程序如何构建之前需要先考虑各个任务的优先级。
 
+  [AIO详解](https://github.com/walkerqiao/walkman/blob/master/docs/APUE/aio_desc.md)
   
 ### 14.6 readv和writev函数
+  readv和writev函数用于在一次函数调用中读、写多个非连续缓冲区。有时也将这两个函数称为散布读(scatter read)和聚集写(gather write).
+  
+```
+#include <sys/uio.h>
+ssize_t readv(int fd, const struct iovec *iov, int iovcnt);
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt);
+```
+  这两个函数的第二个参数是指向iovec结构数组的一个指针:
+```
+struct iovec {
+  void *iov_base; /** starting address of buffer **/
+  size_t iov_len; /** size of buffer **/
+}
+```
+  iovshuzu中的元素数由iovcnt指定，其最大值受限于IOV_MAX. 图14-22显示了这两个函数的参数和iovec之间的关系。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/iov_structure_with_readv_writev.png)
+  
+  writev函数从缓冲区中聚集输出数据的顺序是iov[0], iov[1], 直至iov[iovcnt - 1]. writev返回输出的字节总数，通常应等于所有缓冲区长度之和。
+  
+  readv函数将读入的数据按照上述同样的顺序散布到缓冲区中。readv总是先填满一个缓冲区后，然后再填写下一个。readv返回都到的字节总数。如果遇到文件尾端，已无数据可读，则返回0.
+  
+> 这两个函数始于4.2BSD,后来，SVR也提供它们。在Single Unix Specification的XSI扩展中包括了这两个函数。
+
+  实例
+  在20.8节中的_db_writeidx函数中，需要将两个缓冲区中的内容连续地写到一个文件中。第二个缓冲区是调用者传递过来的一个参数，第一个缓冲区是我们创建的，它包含了第二个缓冲区的长度以及文件中其他信息的文件偏移量。有3中方法可以实现这一要求。
+  1. 调用两次write, 每个缓冲区一次。
+  2. 分配一个大到足以包含两个缓冲区的新缓冲区。将两个缓冲区的内容复制到新缓冲区中，然后对这个新缓冲区调用一次write.
+  3. 调用writev输出两个缓冲区。
+  
+  20.8节的解决方案使用了writev, 但是将它与另外两个方法进行比较，对我们是很有启发的。下图显示了上面3种方法的结果。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/writev_vs_others.png)
+
+  图中解释略去。结论: 应当尽量少的系统调用次数来完成任务。如果我们只写少量的数据，将会发现复制数据然后使用一次write比用writev要划算。但也可能发现，我们管理自己的分段缓冲区会增加程序额外的复杂性成本，所以从性能成本的角度来看不合算。
+  
 
 ### 14.7 readn和writen函数
+  管道、FIFO以及某些设备(特别是终端和网络)有下列两种性质：
+  1. 一次read操作所返回的数据可能少于所要求的数据，即使还没有达到文件尾端也可能是这样。这不是一个错误，应当继续读该设备。
+  2. 一次write操作的返回值也可能少于指定输出的字节数。这可能是由于某个因素造成的，例如，内核输出缓冲区变满。这也不是错误，应当继续写余下的数据。(通常，只有非阻塞描述符，或捕捉到一个信号时，才发生这种write的中途返回。)
 
+  在读、写磁盘文件时从未见到过这种情况，除非文件系统用完了空间，或者接近了配额限制，不能将要求写的数据全部写出。
+  
+  通常，在读写一个管道、网络设备或终端时，需要考虑这些特性。下面两个函数readn和writen的功能分别是读、写指定的N字节数据，并处理返回值可能小于要求值的情况。这两个函数只是按需多次调用read和write直至读、写了N字节数据。
+```
+#include "apue.h"
+
+ssize_t readn(int fd, void *buf, size_t nbytes);
+ssize_t writen(int fd, void *buf, size_t nbytes);
+```
+> 类似于本书很多实例所用的出错处理例程，我们定义这两个函数是便于在后面的例子中使用。readn和writen不是哪个标准的组成部分。
+
+  要将数据写到上面所提到的文件类型时，就可调用writen, 但是仅当实现就知道要接收数据的数据量时，才调用readn. 下面是readn和writen的实现:
+```
+#include "apue.h"
+ssize_t /** read n bytes from a fd **/
+readn(int fd, void *ptr, size_t n)
+{
+  size_t nleft;
+  ssize_t nread;
+  
+  nleft = n;
+  while(nleft > 0) {
+    if((nread = read(fd, ptr, nleft)) < 0) {
+      if(nleft == n)
+        return (-1); /** error, return -1 **/
+      else
+        break; /** error, return amount read so for **/
+    } else if(nread == 0) {
+      break; /** EOF **/
+    }
+    
+    nleft -= nread;
+    ptr += nread;
+  }
+  
+  return (n - nleft); /** return >= 0 **/
+}
+
+ssize_t             /* Write "n" bytes to a descriptor  */
+writen(int fd, const void *ptr, size_t n)
+{
+    size_t        nleft;
+    ssize_t        nwritten;
+
+    nleft = n;
+    while (nleft > 0) {
+        if ((nwritten = write(fd, ptr, nleft)) < 0) {
+            if (nleft == n)
+                return(-1); /* error, return -1 */
+            else
+                break;      /* error, return amount written so far */
+        } else if (nwritten == 0) {
+            break;
+        }
+        nleft -= nwritten;
+        ptr   += nwritten;
+    }
+    return(n - nleft);      /* return >= 0 */
+}
+```
+  注意，若在已经读、写了一些数据之后出错，则这两个函数返回的是已经传输的数据量，而非错误。与此类似，在读时，如达到文件尾端，而且在此之前已成功地读了一些数据，但尚未满足所要求地量，则readn返回已复制到调用者缓冲区中的字节数。
+  
 ### 14.8 内存映射I/O
+  存储映射I/O(memory-mapped I/O)能将一个磁盘文件映射到存储空间的一个缓冲区上，于是，当从缓冲区中取数据时，就相当于读文件中的相应字节。与此类似，将数据存入缓冲区时，相应字节就自动写入文件。这样，就可以在不使用read和write的情况下执行I/O.
+  
+> 存储映射I/O伴随虚拟存储系统已经用了很多年。1981年，4.1BSD以其vread和vwrite函数提供了一种不同形式的存储映射I/O. 4.2BSD实际上并没有包含mmap函数。SUSv4把mmap函数从可选项规范中移到了基础规范中。所有的遵循POSIX的系统都需要支持它。
+
+  为了使用这种功能，应首先告诉内核将一个给定的文件映射到一个存储区域中。这是由mmap函数实现的。
+```
+#include <sys/mmap.h>
+void *mmap(void *addr, size_t len, int prot, int flag, int fd, off_t off);
+```
+  addr参数用于指定映射存储区的起始地址。通常将其设置为0，这表示由系统选择该映射区的起始地址。此函数的返回值是该映射区的起始地址。
+  
+  fd参数是指定要被映射文件的描述符。在文件映射到地址空间之前，必须先打开该文件。len参数是映射的字节数，off是要映射字节在文件中的偏移量。
+  
+  prot参数指定了映射存储区的保护要求。见下图：
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/mmap_prot.png)
+  
+  可将prot参数指定为PROT_NONE, 也可以指定为PROT_WRITE, PROT_EXEC的任意组合的按位或。对指定映射存储区的保护要求不能超过文件open模式访问权限。例如，若该文件是只读打开的，那么对映射存储区就不能指定PROT_WRITE.
+  
+  在说明flag参数之前，先看一下存储映射文件的基本情况。图14-26显示了一个存储映射文件。
 
 ### 14.9 总结
 
-* [AIO详解](https://github.com/walkerqiao/walkman/blob/master/docs/APUE/aio_desc.md)
+
