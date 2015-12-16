@@ -868,3 +868,5 @@ int lio_listio(int mode, struct aiocb *restrict const list[restrict], int nent, 
 ### 14.8 内存映射I/O
 
 ### 14.9 总结
+
+* [AIO详解](https://github.com/walkerqiao/walkman/blob/master/docs/APUE/aio_desc.md)
