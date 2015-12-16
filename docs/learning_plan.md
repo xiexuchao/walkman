@@ -24,8 +24,8 @@
 
 
 
-  本人目前的知识体系:
-
+本人目前的知识体系:
+-----------------------
   熟悉领域:
   * WEB开发相关技术: css, js, php, linux, mysql, apache, nginx等。
   * 曾经熟悉shell, awk, sed等。
