@@ -822,6 +822,44 @@ const struct timespec *timeout);
   list参数时一个指向AIO控制块数组的指针，nent参数表明了数组中的条目数。数组中的空指针会被跳过，其他条目都必须指向已用于初始化异步I/O操作的AIO控制块。
   
   当还有我们不想再完成的等待中的异步I/O操作时，我们可以尝试使用aio_cancel函数来取消它们。
+```
+#include <aio.h>
+int aio_cancel(int fd, struct aiocb *aiocb);
+```
+  fd参数制定了哪个未完成的异步I/O操作的文件描述符。如果aiocb参数为NULL，系统将会尝试取消所有该文件上未完成的异步I/O操作。其他情况下，系统将尝试取消由AIO控制块描述的单个异步I/O操作。我们之所说系统“尝试”取消操作，是因为无法保证系统能够取消正在进程中的任何操作。
+  aio_cancel函数可能会返回以下4个值中的一个:
+  * AIO_ALLDONE: 所有操作在尝试取消它们之前已经完成。
+  * AIO_CANCELED: 所有要求的操作已被取消
+  * AIO_NOTCANCELED: 至少由一个要求的操作没有被取消
+  * -1: 对aio_cancel的调用失败，错误码将被存储在errno中。
+  
+  如果异步I/O操作被成功取消，对相应的AIO控制块调用aio_error函数将会返回错误ECANCELED. 如果操作不能被取消，那么相应的AIO控制块不会因为对aio_cancel的调用而被修改。
+
+  还有一个函数也被包含在异步I/O接口当中，尽管它既能以同步方式来使用，又能以异步方式来使用，这个函数就是lio_listio.该函数提交一系列由一个AIO控制块列表描述的I/O请求。
+```
+#include <aio.h>
+int lio_listio(int mode, struct aiocb *restrict const list[restrict], int nent, struct sigevent *restrict sigev);
+```
+  mode参数决定了I/O是否真的是异步的。如果该参数被设定为LIO_WAIT, lio_listio函数将在所有由列表指定的I/O操作完成后返回。在这种情况下，sigev参数将被忽略。如果mode参数设定为LIO_NOWAIT，lio_listio函数将在I/O请求入队后立即返回。进程将在所有I/O操作完成后，按照sigev参数指定的，被异步地通知。如果不想被通知，可以把sigev设定为NULL. 注意，每个AIO控制块本身也可能启用了在各自操作完成时的异步通知。被sigev参数指定的异步通知是在此之外另加的，并且只会在所有I/O操作完成后发送。
+  
+  list参数指向AIO控制块列表，该列表指定了要运行的I/O操作的。nent参数制定了额数组中元素的个数。AIO控制块列表还可以包含NULL指针，这些太哦亩将被忽略。
+  
+  在每一个AIO控制块中，aio_lio_opcode字段制定了该操作是一个读操作(LIO_READ), 写操作(LIO_WRITE)，还是将被忽略的空操作(LIO_NOP). 读操作会按照对应的AIO控制块被传给了aio_read函数来处理。类似的，写操作会按照对应的AIO控制块被传给了aio_write函数来处理。
+  
+  实现会限制我们不想实现的异步操作I/O操作的数量。这些都是运行时不变量，其总结如下图。
+  
+  可以通过sysconf函数并把name参数设置为_SC_IO_LISTIO_MAX来设定AIO_LISTIO_MAX的值。类似的，可以通过调用sysconf并把name设置为_SC_AIO_MAX来设置AIO_MAX的值，通过调用sysconf并把其参数设置为_SC_AIO_PRIO_DELTA_MAX来设定AIO_PRIO_DELTA_MAX的值。
+  
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/aio_runtime_const.png)
+  
+  引入POSIX异步操作I/O接口的初衷时为实时应用提供一种方法，避免在执行I/O操作时阻塞进程。接下来就让我们看一个使用这些接口的例子。
+  
+  实例：
+  虽然我们不会在本文中讨论实时编程，但是因为POSIX异步I/O接口现在是Single Unix Specification的基本部分，所以我们要了解以下怎么使用它们。为了对比异步I/O接口和相应传统I/O接口，我们来研究一个任务，将一个文件从一种格式翻译成另一种格式。
+  
+  下面的程序是使用20世纪80年代流行的USENET新闻系统中使用的ROT-13算法，翻译文件，该算法原本用于将文本中带有侵犯性的或含有剧透和笑话笑点部分的文本模糊化。该算法将文本中的英文字符a~z和A~Z分别循环向右移13个字母位移，但步改变其他字符。
+  
+  
   
 ### 14.6 readv和writev函数
 
@@ -830,3 +868,5 @@ const struct timespec *timeout);
 ### 14.8 内存映射I/O
 
 ### 14.9 总结
+
+* [AIO详解](https://github.com/walkerqiao/walkman/blob/master/docs/APUE/aio_desc.md)
