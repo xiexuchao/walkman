@@ -1323,9 +1323,15 @@ main(int argc, char **argv)
   
   ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/mmap_memcpy_vs_read_write.png)
   
-  
+  后面的对比说明文字略过1000字。
   
   
 ### 14.9 总结
+  本章描述了很多高级I/O功能，其中有许多将用在用面章节的实例中。
+  * 非阻塞I/O--发一个I/O操作，不使其阻塞
+  * 记录锁
+  * I/O多路转接--select/poll函数
+  * readv和writev函数
+  * 存储映射I/O(mmap函数)
 
 
