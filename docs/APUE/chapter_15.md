@@ -230,6 +230,31 @@ WAIT_CHILD(void)
   
   
 ### 15.3 popen和pclose函数
+  常见的操作是创建一个连接到另一个进程的管道，然后读取其输出或向其输入端发送数据，为此，标准I/O库提供了两个函数popen和pclose。 这两个函数实现的操作是: 创建一个管道，fork一个子进程，关闭并未使用的管道端，执行一个shell运行命令，然后等待命令终止。
+  
+```
+#include <stdio.h>
+FILE *popen(const char *cmdstring, const char *type);
+
+int pclose(FILE *fp);
+```
+  函数popen先执行fork, 然后调用exec执行cmdstring, 并且返回一个标准I/O文件指针。
+  * 如果type是"r", 则文件指针连接到cmdstring的标准输出。
+  * 如果type是"w", 则文件指针连接到cmdstring的标准输入。
+  如下图:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/popen_r_dialog.png)
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/popen_w_dialog.png)
+  
+  有一种方法可以帮助我们记住popen的最后一个参数及其作用，这就是与fopen进行类比。如果type为"r", 则返回的文件指针是可读的，如果type为"w", 那么返回的文件指针是可写的。
+
+  pclose函数关闭标准I/O流，等待命令终止，然后返回shell的终止状态。如果shell不能被执行，则pclose返回的终止状态与shell已执行exit(127)一样。
+  
+  cmdstring以Bourne shell以下方式执行: `sh -c cmdstring`
+  
+  这表示shell将扩展cmdstring中的任何特殊字符。例如，可以使用:
+  fp = popen("ls *.c", "r");
+  或者
+  fp = popen("cmd 2>&1", "r");
 
 ### 15.4 协调
 
