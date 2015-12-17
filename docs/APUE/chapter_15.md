@@ -436,9 +436,77 @@ pclose(FILE *fp)
   
   popen非常适合执行简单的过滤器程序，它变换运行命令的输入或输出。当命令希望构造它自己的管道时，就是这种情况。
   
+  实例:
+  考虑一个应用程序，他向标准输出写一个提示，然后从标准输入读一行。使用popen，可以在应用程序和输入之间插入一个程序以便对输入进行变换处理。图15-13显示了这种情况下的进程安排。
   
+  对输入进行变换可能是路径名扩充，或是提供一种历史机制(记住以前输入的命令)。
+  
+  下面的程序用于简单演示这个操作过滤程序。它将标准输入复制到标准输出，在复制时将大写字母转换成小写字母。在写完换行符之后，要仔细冲洗(fflush)标准输出，这样做的理由将在下一节介绍协同进程时讨论。
+```
+#include "apue.h"
 
-### 15.4 协调
+#include <ctype.h>
+
+int
+main(void)
+{
+    int c;
+    while((c = getchar()) != EOF) {
+        if(isupper(c))
+            c = tolower(c);
+
+        if(putchar(c) == EOF)
+            err_sys("output error");
+
+        if(c == '\n')
+            fflush(stdout);
+    }   
+
+    exit(0);
+}
+```
+  这个过滤程序编译成可执行文件myuclc, 然后下面程序会用popen调用它。
+```
+#include "apue.h"                                                                      
+#include <sys/wait.h>                                                                  
+                                                                                       
+int                                                                                    
+main(void)                                                                             
+{                                                                                      
+    char line[MAXLINE];                                                                
+    FILE *fpin;                                                                        
+                                                                                       
+    if((fpin = popen("./myuclc", "r")) == NULL)                                        
+        err_sys("popen error");                                                        
+                                                                                       
+    for( ;; ) {                                                                        
+        fputs("prompt> ", stdout);                                                     
+        fflush(stdout);                                                                
+                                                                                       
+        if(fgets(line, MAXLINE, fpin) == NULL) /** read from pipe **/                  
+            break;                                                                     
+                                                                                       
+        if(fputs(line, stdout) == EOF)                                                 
+            err_sys("fputs error to pipe");                                            
+    }                                                                                  
+                                                                                       
+    if(pclose(fpin) == -1)                                                             
+        err_sys("pclose error");                                                       
+                                                                                       
+    putchar('\n');                                                                     
+    exit(0);                                                                           
+}
+```
+  因为标准输出通常是行缓冲的，而提示并不包含换行符，所以在写了提示后，需要调用fflush.
+
+### 15.4 协同进程
+  Unix系统过滤程序从标准输入读取数据，向标准输出写数据。几个过滤程序通常在shell管道中线性连接。当一个过滤程序既产生某个过滤程序的输入，又读取该过滤程序的输出时，它就变成了协同进行(coprocess).
+  
+  Korn shell提供了协同进程。 Bourne shell, Bourne-again shell和C shell并没有提供将进程连接成协同进程的方法。协同进程通常在shell后台运行，其标准输入和标准输出通过管道连接到另一程序。虽然初始化一个协同进程，并将其输入和输出连接到另一个进程的shell语法十分奇特，但是协同进程的工作方式在C程序中也是非常有用的。
+  
+  popen只提供连接到另一个进程的标准输入或标准输出的一个单向管道，而协同进程则有连接到另一个进程的两个单向管道: 一个连接到其标准输入，另一个则来自其标准输出。我们想将数据写到其标准输入，经其处理后，再从其标准输出读取数据。
+  
+  
 
 ### 15.5 FIFO
 
