@@ -1194,7 +1194,7 @@ writen(int fd, const void *ptr, size_t n)
 
   为了使用这种功能，应首先告诉内核将一个给定的文件映射到一个存储区域中。这是由mmap函数实现的。
 ```
-#include <sys/mmap.h>
+#include <sys/mman.h>
 void *mmap(void *addr, size_t len, int prot, int flag, int fd, off_t off);
 ```
   addr参数用于指定映射存储区的起始地址。通常将其设置为0，这表示由系统选择该映射区的起始地址。此函数的返回值是该映射区的起始地址。
@@ -1229,7 +1229,7 @@ void *mmap(void *addr, size_t len, int prot, int flag, int fd, off_t off);
   
   调用mprotect可以更改一个现有映射的权限。
 ```
-#include <sys/mmap.h>
+#include <sys/mman.h>
 int mprotect(void *addr, size_t len, int prot);
 ```
   prot的合法值和mmap中的prot参数一样。请注意，地址参数addr的值必须时系统页长的整数倍。
@@ -1238,7 +1238,7 @@ int mprotect(void *addr, size_t len, int prot);
   
   如果共享映射中的页已经被修改，那么可以调用msync将该页冲洗到被映射的文件中。msync函数类似与fsync，但作用于存储映射区。
 ```
-#include <sys/mmap.h>
+#include <sys/mman.h>
 int msync(void *addr, size_t len, int flags);
 ```
   如果映射是私有的，那么不修改被映射的文件。与其他存储映射函数一样，地址必须与页边界对齐。
@@ -1249,10 +1249,79 @@ int msync(void *addr, size_t len, int flags);
   
   当进程终止时，会自动解除存储映射区的映射，或者直接嗲用munmap函数也可以解除映射区。关闭映射存储区时使用的文件描述符并不解除映射区。
 ```
-#include <sys/mmap.h>
+#include <sys/mman.h>
 int munmap(void *addr, size_t len);
 ```
   munmap并不影响被映射的对象，也就是说，调用munmap并不会使映射区的内容写到磁盘文件上。对于MAP_SHARED区磁盘文件的更新，会在我们将数据写到存储映射区后的某个时刻，按内核虚拟存储算法自动进行。在存储区解除映射后，对MAP_PRIVATE存储区的修改会被丢弃。
+  
+  实例: 用存储映射I/O复制文件(类似于cp(1))
+  
+```
+#include "apue.h"
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+
+
+#define COPYINCR (1024 * 1024 * 1024) /** 1GB **/
+
+int
+main(int argc, char **argv)
+{
+    int fdin, fdout;
+    void *src, *dst;
+    size_t copysz;
+    struct stat sbuf;
+    off_t fsz = 0;
+
+    if(argc != 3)
+        err_quit("usage: %s <fromfile> <tofile>", argv[0]);
+
+    if((fdin = open(argv[1], O_RDONLY)) < 0)
+        err_sys("can't open %s for reading", argv[1]);
+
+    if((fdout = open(argv[2], O_RDWR | O_CREAT | O_TRUNC, FILE_MODE)) < 0)
+        err_sys("can't creat %s for writing", argv[2]);
+
+    if(fstat(fdin, &sbuf) < 0) /** need size of input file **/
+        err_sys("fstat error");
+
+    if(ftruncate(fdout, sbuf.st_size) < 0) /** set output file size **/
+        err_sys("ftruncate error");
+
+    while(fsz < sbuf.st_size) {
+        if((sbuf.st_size - fsz) > COPYINCR)
+            copysz = COPYINCR;
+        else
+            copysz = sbuf.st_size - fsz;
+
+        if((src = mmap(0, copysz, PROT_READ, MAP_SHARED,
+            fdin, fsz)) == MAP_FAILED)
+            err_sys("mmap error for input");
+
+        if((dst = mmap(0, copysz, PROT_READ | PROT_WRITE,
+            MAP_SHARED, fdout, fsz)) == MAP_FAILED)
+            err_sys("mmap error for output");
+
+        memcpy(dst, src, copysz);
+        munmap(src, copysz);
+        munmap(dst, copysz);
+        fsz += copysz;
+    }
+
+    exit(0);
+}
+```
+  程序首先打开两个文件，然后调用fstat得到输入文件的长度。在为输入文件调用mmap和设置输出文件长度时都需要使用输入文件长度。可以调用ftruncate设置输出文件的长度。如果不设置输出文件的长度，则对输出文件调用mmap也可以，但是对相关存储区的第一次引用会产生SIGBUS信号。(本人macbook直接产生SIGBUS,程序退出，拷贝没有成功)。
+  然后对每个文件调用mmap, 将文件映射到内存，最后调用memcpy将输入缓冲区的内容复制到输出缓冲区。为了限制使用内存的量，我们每次最多复制1GB的数据(如系统没有足够的内存，可能无法把一个很大的文件中的所有内容都映射到内存中)。在映射文件中的后一部分数据前，我们需要解除前一部分数据的映射。
+  
+  在从输入缓冲区src取数据字节时，内核自动读输入文件；在将数据存入输出缓冲区dst时，内核自动将数据写到输出文件中。
+  
+> 数据被写到文件的确切事件依赖于系统的页管理算法。某些系统设置了守护进程，在系统运行期间，他慢条斯理的将改写过的页写到磁盘上。如果想要确保数据安全的写到文件中，则需要在进程终止以前以MS_SYNC标识调用msync.
+
+  将存储区映射复制与用read和write进行复制(缓冲区长度为8192)相比较，得到下图所示结果。其中事件单位是秒，被复制文件的长度是300MB. 注意，我们并没有在退出前将数据同步到磁盘。
+  
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/mmap_memcpy_vs_read_write.png)
   
   
   
