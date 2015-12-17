@@ -506,9 +506,155 @@ main(void)
   
   popen只提供连接到另一个进程的标准输入或标准输出的一个单向管道，而协同进程则有连接到另一个进程的两个单向管道: 一个连接到其标准输入，另一个则来自其标准输出。我们想将数据写到其标准输入，经其处理后，再从其标准输出读取数据。
   
+  实例: 
+  让我们通过一个实例来观察协同进程。进程创建两个管道:一个是协同进程的标准输入，另一个是协同进程的标准输出。下图展示了这种安排:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/coprocess_dialog.png)
+
+  下面程序是一个简单的协同进程，它从标准输入读取两个数，计算它们的和，然后将和写至其标准输出。(协同进程通常会做较此有意义的工作。设计本实例的目的是为了帮助了解将进程连接起来所需的各种管道设施。)
+```
+#include "apue.h"
+
+int
+main(void)
+{
+    int     n, int1, int2;
+    char    line[MAXLINE];
+
+    while ((n = read(STDIN_FILENO, line, MAXLINE)) > 0) {
+        line[n] = 0;        /* null terminate */
+        if (sscanf(line, "%d%d", &int1, &int2) == 2) {
+            sprintf(line, "%d\n", int1 + int2);
+            n = strlen(line);
+            if (write(STDOUT_FILENO, line, n) != n)
+                err_sys("write error");
+        } else {
+            if (write(STDOUT_FILENO, "invalid args\n", 13) != 13) 
+                err_sys("write error");
+        }   
+    }   
+    exit(0);
+}
+```
+  对此程序编译，将其可执行目标代码存入名add2的文件。
+  
+  然后下面的程序从其标准输入读取两个数之后调用add2协同进程，并将协同进程送来的值写到其标准输出。
+```
+#include "apue.h"
+
+static void    sig_pipe(int);        /* our signal handler */
+
+int
+main(void)
+{
+    int      n, fd1[2], fd2[2];
+    pid_t    pid;
+    char    line[MAXLINE];
+
+    if (signal(SIGPIPE, sig_pipe) == SIG_ERR)
+        err_sys("signal error");
+
+    if (pipe(fd1) < 0 || pipe(fd2) < 0)
+        err_sys("pipe error");
+
+    if ((pid = fork()) < 0) {
+        err_sys("fork error");
+    } else if (pid > 0) {                            /* parent */
+        close(fd1[0]);
+        close(fd2[1]);
+
+        while (fgets(line, MAXLINE, stdin) != NULL) {
+            n = strlen(line);
+            if (write(fd1[1], line, n) != n)
+                err_sys("write error to pipe");
+            if ((n = read(fd2[0], line, MAXLINE)) < 0)
+                err_sys("read error from pipe");
+            if (n == 0) {
+                err_msg("child closed pipe");
+                break;
+            }   
+            line[n] = 0;    /* null terminate */
+            if (fputs(line, stdout) == EOF)
+                err_sys("fputs error");
+        }   
+
+        if (ferror(stdin))
+            err_sys("fgets error on stdin");
+        exit(0);
+    } else {                                    /* child */
+        close(fd1[1]);
+        close(fd2[0]);
+        if (fd1[0] != STDIN_FILENO) {
+            if (dup2(fd1[0], STDIN_FILENO) != STDIN_FILENO)
+                err_sys("dup2 error to stdin");
+            close(fd1[0]);
+        }   
+
+        if (fd2[1] != STDOUT_FILENO) {
+            if (dup2(fd2[1], STDOUT_FILENO) != STDOUT_FILENO)
+                err_sys("dup2 error to stdout");
+            close(fd2[1]);
+        }
+        if (execl("./add2", "add2", (char *)0) < 0)
+            err_sys("execl error");
+    }
+    exit(0);
+}
+
+static void
+sig_pipe(int signo)
+{
+    printf("SIGPIPE caught\n");
+    exit(1);
+}
+```
+  这个程序创建了两个管道，父进程、子进程各自关闭它们不需要使用的管道端。必须使用两个管道: 一个用于协作进程的标准输入，另一个则用作它的标准输出。然后，子进程调用dup2使管道描述符移至其标准输入和标准输出，最后调用了execl. 
+  若编译上面的程序，他会按预期工作。此外，如果程序正在等待用户输入的时候杀死了add2协同进程，然后又输入两个数，那么程序对没有读进程的管道进行写操作时，会调用信号处理程序。
+  
+  实例: 在协同进程add2中，我们故意使用了底层I/O(Unix系统调用):read和write。 如果使用标准I/O来改写该协同程序，会怎么样呢?
+  下面是改写的add2.c代码。
+```
+#include "apue.h"
+
+int
+main(void)
+{
+    int     int1, int2;
+    char    line[MAXLINE];
+
+/*    if(setvbuf(stdin, NULL, _IOLBF, 0) != 0)
+        err_sys("setvbuf error");
+
+    if(setvbuf(stdout, NULL, _IOLBF, 0) != 0)
+        err_sys("setvbuf error");*/
+
+    while (fgets(line, MAXLINE, stdin) != NULL) {
+        if (sscanf(line, "%d%d", &int1, &int2) == 2) {
+            if(printf("%d\n", int1 + int2) == EOF)
+                err_sys("printf error");
+        } else {
+            if(printf("invalid args\n") == EOF)
+                err_sys("printf error");
+        }   
+    }   
+    exit(0);
+}
+```
+  调用这个协同程序，则它不能工作。问题在默认的标准I/O缓冲机制上。当调用上面的程序时，对标准输入的第一个fgets引起标准I/O库分配一个缓冲区，并选择缓冲的类型。因为标准输入是一个管道，所以标准I/O是全缓冲的。标准输出也是如此。当add2从其标准输入读取而发生阻塞时，调用这个协作程序的程序从管道读时也发生阻塞，于是产生了死锁。
+  
+  这里，可以对将要运行的这一协同进程加以控制。 开启while循环上面的注释代码块即可。这些代码使得: 当有一行可用时，fgets就返回(设置stdin和stdout为行级缓冲)；当输出一个换行符时，printf立即执行fflush。对setvbuf进行的这些显示调用使得add2协同进程就可以正常工作了。
+  
+  如果不能修改协同程序的目标程序，则需要使用其他技术。例如，如果在程序中使用awk(1)作为协同进程(代替add2程序)，则下列命令行不能工作:
+```
+#!/bin/awk -f
+{ print $1 + $2 }
+```
+  不能工作的原因还是标准I/O的缓冲机制问题。但是在这种情况下，无法改变awk的工作方式(除非有awk源代码)。我们不能修改awk的可执行代码，于是也就不能更改处理其标准I/O缓冲的方式。
+  
+  对这种问题的一般解决方法是使被调用的协同进程认为它的标准输入和输出都被连接到了一个终端。这使得协同进程中的标准I/O例程对这两个I/O流进行行缓冲，这类似于前面所做的显示调用setvbuf. 第19章将用伪终端实现这种方法。
   
 
 ### 15.5 FIFO
+  FIFO
 
 ### 15.6 XSI IPC
 
