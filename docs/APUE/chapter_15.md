@@ -255,6 +255,188 @@ int pclose(FILE *fp);
   fp = popen("ls *.c", "r");
   或者
   fp = popen("cmd 2>&1", "r");
+  
+  实例: 用popen实现前面的分页程序，代码如下:
+```
+#include "apue.h"
+
+#include <sys/wait.h>
+
+#define PAGER "${PAGER:-more}" /** environment variable, or default **/
+
+int
+main(int argc, char *argv[])
+{
+    char line[MAXLINE];
+    FILE *fpin, *fpout;
+
+    if(argc != 2)
+        err_quit("Usage: %s <pathname>", argv[0]);
+
+    if((fpin = fopen(argv[1], "r")) == NULL)
+        err_sys("can't open %s", argv[1]);
+
+    if((fpout = popen(PAGER, "w")) == NULL)
+        err_sys("popen error");
+
+    /** copy argv[1] to pager **/
+    while(fgets(line, MAXLINE, fpin) != NULL) {
+        if(fputs(line, fpout) == EOF)
+            err_sys("fputs error to pipe");
+    }   
+
+    if(ferror(fpin))
+        err_sys("fgets error");
+
+    if(pclose(fpout) == -1) 
+        err_sys("pclose error");
+
+    exit(0);
+}
+```
+  使用popen减少了需要编写的代码量。shell命令${PAGER:-more}的意思是，如果shell变量PAGER已经定义，且值非空，则使用其值，否则使用字符串more.
+  
+  下面我们自己编写popen和pclose的实现:
+```
+#include "apue.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+
+/*
+ * Pointer to array allocated at run-time.
+ */
+static pid_t    *childpid = NULL;
+
+/*
+ * From our open_max(), {Prog openmax}.
+ */
+static int        maxfd;
+
+FILE *
+popen(const char *cmdstring, const char *type)
+{
+    int        i;  
+    int        pfd[2];
+    pid_t    pid;
+    FILE    *fp;
+
+    /* only allow "r" or "w" */
+    if ((type[0] != 'r' && type[0] != 'w') || type[1] != 0) {
+        errno = EINVAL;
+        return(NULL);
+    }   
+
+    if (childpid == NULL) {        /* first time through */
+        /* allocate zeroed out array for child pids */
+        maxfd = open_max();
+        if ((childpid = calloc(maxfd, sizeof(pid_t))) == NULL)
+            return(NULL);
+    }   
+
+    if (pipe(pfd) < 0)
+        return(NULL);    /* errno set by pipe() */
+    if (pfd[0] >= maxfd || pfd[1] >= maxfd) {
+        close(pfd[0]);
+        close(pfd[1]);
+        errno = EMFILE;
+        return(NULL);
+    }
+    if ((pid = fork()) < 0) {
+        return(NULL);    /* errno set by fork() */
+    } else if (pid == 0) {                            /* child */
+        if (*type == 'r') {
+            close(pfd[0]);
+            if (pfd[1] != STDOUT_FILENO) {
+                dup2(pfd[1], STDOUT_FILENO);
+                close(pfd[1]);
+            }
+        } else {
+            close(pfd[1]);
+            if (pfd[0] != STDIN_FILENO) {
+                dup2(pfd[0], STDIN_FILENO);
+                close(pfd[0]);
+            }
+        }
+
+        /* close all descriptors in childpid[] */
+        for (i = 0; i < maxfd; i++)
+            if (childpid[i] > 0)
+                close(i);
+
+        execl("/bin/sh", "sh", "-c", cmdstring, (char *)0);
+        _exit(127);
+    }
+
+    /* parent continues... */
+    if (*type == 'r') {
+        close(pfd[1]);
+        if ((fp = fdopen(pfd[0], type)) == NULL)
+            return(NULL);
+    } else {
+        close(pfd[0]);
+        if ((fp = fdopen(pfd[1], type)) == NULL)
+            return(NULL);
+    }
+
+    childpid[fileno(fp)] = pid;    /* remember child pid for this fd */
+    return(fp);
+}
+
+int
+pclose(FILE *fp)
+{
+    int        fd, stat;
+    pid_t    pid;
+
+    if (childpid == NULL) {
+        errno = EINVAL;
+        return(-1);        /* popen() has never been called */
+    }
+
+    fd = fileno(fp);
+    if (fd >= maxfd) {
+        errno = EINVAL;
+        return(-1);        /* invalid file descriptor */
+    }
+    if ((pid = childpid[fd]) == 0) {
+        errno = EINVAL;
+        return(-1);        /* fp wasn't opened by popen() */
+    }
+
+    childpid[fd] = 0;
+    if (fclose(fp) == EOF)
+        return(-1);
+
+    while (waitpid(pid, &stat, 0) < 0)
+        if (errno != EINTR)
+            return(-1);    /* error other than EINTR from waitpid() */
+
+    return(stat);    /* return child's termination status */
+}
+```
+  虽然，popen的核心代码与本章中前面用过的代码类似，但是增加了很多需要处理的细节。
+  首先每次调用popen时，应当记住所创建的子进程的进程ID,以及其描述符或FILE指针。 我们选择在数组childpid中保存子进程ID, 并用文件描述符作为其下标。于是，当以FILE指针作为参数调用pclose时，调用标准函数fileno得到文件描述符，然后取得子进程ID, 并用其作为waitpid的参数。因为一个进程可能调用popen多次，所以在动态分配childpid数组时(第一次调用popen时)，其数组长度应当是最大文件描述符数，于是该数组中可以存放与最大文件描述符相同的子进程ID数。
+  
+  注意，2-17中的open_max函数可以返回打开文件的最大数的近似值，如果这个值与系统不相关的花。注意不要使用那种其值大于(或等于)open_max返回值的管道文件描述符。对于popen, 如果open_max函数返回值恰巧非常小，那我们就会关闭管道文件描述符并将errno设置为EMFILE, 以此表明这里的很多文件描述符是打开的，最后返回-1. 对于pclose，如果对应于文件指针参数的描述符比所期望的大，则将errno设置为EINVAL，并返回-1.
+  
+  调用pipe和fork然后为popen函数中的每个进程复制合适的描述符，这个过程和我们在本章前面所做的类似。
+  
+  POSIX.1要求popen关闭那些以前调用popen打开的、现在仍然在子进程中打开着的I/O流。为此，在子进程中从头逐个检查childpid数组的各个元素，关闭仍旧打开着的描述符。
+  
+  若pclose的调用者已经为信号SIGCHLD设置了一个信号处理程序，则pclose中的waitpid调用将返回一个错误EINTR. 因为允许调用者捕捉到此信号(或者任何其他可能中断waitpid调用的信号)，所以当waitpid被一个捕捉到的信号中断时，我们只是再次调用waitpid.
+  
+  注意，如果应用程序调用waitpid，并且获得了popen创建的子进程的退出状态，那么我们会在应用程序调用pclose时调用waitpid，如果发现子进程已不再存在，将返回-1, 将errno设置为ECHILD. 这正是这种情况下POSIX.1所要求的。
+  
+> 如果一个信号中断了wait, pclose的一些早期版本会返回错误EINTR. pclose的一些早期版本在wait期间，会阻塞或忽略信号SIGINT, SIGQUIT和SIGHUP. 这是POSIX.1所不允许的。
+
+  注意，popen决不应由设置用户ID或设置组ID程序调用。当它执行命令时，popen等同于: execl("/bin/sh", "sh", "-c", command, NULL);
+  
+  它在从调用者继承的环境中执行shell,并由shell解释执行command. 一个恶意用户可以操控这种环境，使得shell能以设置ID文件模式所授予的提升了的权限以及非预期的方式执行命令。
+  
+  popen非常适合执行简单的过滤器程序，它变换运行命令的输入或输出。当命令希望构造它自己的管道时，就是这种情况。
+  
+  
 
 ### 15.4 协调
 
