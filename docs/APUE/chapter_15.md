@@ -654,26 +654,89 @@ main(void)
   
 
 ### 15.5 FIFO
-  FIFO
+  FIFO有时被称为命名管道。未命名的管道只能在两个相关的进程之间使用，而且这两个相关的进程还要有一个共同创建了它们的祖先进程。但是FIFO，不相关的进程也能交换数据。
+  
+  第14章中已经提及FIFO是一种文件类型。通过stat结构的st_mode成员编码可以知道文件是否是FIFO类型。可以用S_ISFIFO宏对此进行测试。
+  创建FIFO类似于创建文件。确实，FIFO的路径名存在于文件系统中。
+```
+#include <sys/stat.h>
+int mkfifo(const char *path, mode_t mode);
+int mkfifoat(int fd, const char *path, mode_t mode);
+```
+  mkfifo函数中的mode参数规格说明与open函数中的mode的相同。新FIFO的用户和组的所有权规则与4.6节所述相同。
+  mkfifoat函数和mkfifo函数相似，但是mkfifoat函数可以被用来在fd文件描述符表示的目录相关的位置创建一个FIFO. 像其他*at函数一样，这里有三种情形:
+  1. 如果path参数指定的是绝对路径名，则fd参数会被忽略掉，并且mkfifoat函数的行为和mkfifo类似。
+  2. 如果path参数指定的是相对路径名，则fd参数是一个打开目录的有效文件描述符，路径名和目录有关。
+  3. 如果path参数指定的是相对路径名，并且fd参数有一个特殊值AT_FDCWD, 则路径名以当前目录开始，mkfifoat和mkfifo类似。
+  
+  当我们用mkfifo或和mkfifoat创建FIFO时，要用open来打开它。确实，正常的文件I/O函数(如close, read, write和unlink)都需要FIFO.
+> 应用程序可以用mknod和mknodat函数创建FIFO. 因为POSIX.1原先并没有包括mknod函数，所以mkfifo是专门为POSIX.1设计的。mknod和mknodat函数现在以及包括在POSIX.1的XSI扩展中。
+> POSIX.1也包括了对mkfifo(1)命令的支持。本书讨论的4中平台都提供此命令。因此，可以用一条shell命令创建一个FIFO, 然后用一般的shell I/O重定向对其进行访问。
+
+  当open一个FIFO时，非阻塞标志(O_NONBLOCK)会产生下列影响。
+  * 在一般情况下(没有指定O_NONBLOCK),只读open要阻塞到某个其他进程为写而打开这个FIFO为止。类似的，只写open要阻塞到某个其他进程为读而打开它为止。
+  * 如果指定了O_NONBLOCK，则只读open立即返回。但是，如果没有进程为读而打开一个FIFO, 那么只写open将返回-1,并将errno设置成ENXIO.
+  
+  类似于管道，若write一个尚无进程为读而打开的FIFO,则产生信号SIGPIPE.若某个FIFO的最后一个写进程关闭了该FIFO, 则将为该FIFO的读进程产生一个文件结束标志。
+
+  一个给定的FIFO有多个写进程是常见的。这就意味着，如果不希望多个进程所写的数据交叉，则必须考虑原子写操作。和管道一样，常量PIPE_BUF说明了可被原子的写到FIFO的最大数据量。
+  FIFO有以下两种用途。
+  1. shell命令使用FIFO将数据从一条管道传送到另一条时，无需创建中间临时文件。
+  2. 客户进程-服务器进程应用程序中，FIFO用作聚集点，在客户进程和服务器进程两者之间传递数据。
+  
+  我们各用一个实例来说明这两种用途。
+  实例: 用FIFO复制输出流
+  FIFO可用于复制一系列shell命令的输出流。这就防止了将数据写向中间磁盘文件(类似于用管道来避免中间磁盘文件)。但是不同的是，管道只能用于两个进程之间的线性连接，而FIFO是有名字的，因此它可用于非线性连接。
+  考虑这样的一个过程，它需要对一个经过过滤的输入流进行两次处理。下图显示了这种安排:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/fifo_2_way_done.png)
+
+  使用FIFO和Unix程序tee(1)就可以实现这样的过程而无需使用临时文件。(tee程序将其标准输入同时复制到其标准输出已经其命令行中命令的文件中。)
+```
+mkfifo fifo1
+prog3 < fifo1 & prog1 < infile | tee fifo1 | prog2
+```
+  创建FIFO，然后启动prog3从FIFO读数据。然后启动prog1, 用tee将其输出发送到FIFO和prog2. 下图显示了这种安排。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/fifo_send_to_2procesess.png)
+  
+  实例: 使用FIFO进行客户进程－服务器进程通信
+  FIFO的另一个用途是在客户端进程和服务器进程之间传送数据。如果有一个服务器进程，它与很多客户进程有关，每个客户端都可将其请求写到一个该服务器进程创建的众所周知的FIFO中(众所周知的意思是: 所有需要与服务器进程联系的客户进程都知道该FIFO的路径名)。如下图:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/server_wellknown_fifo.png)
+  
+  因为该FIFO有多个写进程，所以客户进程发送给服务器进程的请求长度要小于PIPE_BUF字节。这样就能避免客户进程的多次写之间的交叉。
+  
+  在这种类型的客户进程-服务器进程通信中使用FIFO的问题是: 服务器进程如何将回答送回各个客户进程。不能使用单个FIFO, 因为客户进程不可能知道何时去读它们的响应以及何时响应其他客户进程。一种解决方法是，每隔客户进程都在其请求中包含它的进程ID, 然后服务器进程为每个客户端进程创建一个FIFO, 所使用的路径名是以客户进程的进程ID为基础的。例如，服务器进程可以用名字/tmp/serv1.XXXX创建FIFO, 其中XXXX被替换成客户进程的进程ID. 如下图所示:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/server_client_communication_with_fifo.png)
+  
+  虽然这种安排可以工作，但服务器进程不能判断一个客户进程是否崩溃终止，这就使得客户进程专用FIFO会遗留在文件系统中。另外，服务器进程还必须捕捉SIGPIPE信号，因为客户端进程在发送一个请求后，有可能没有读取响应就终止了，于是留下一个只有写进程(服务器进程)而无读进程的客户进程专用FIFO.
+  
+  按上图的安排，如果服务器进程以只读的方式打开众所周知的FIFO(因为它只需要读该FIFO)，则每当客户进程个数从1变成0时，服务器进程就将在FIFO中读到(read)一个文件结束标志。为使服务器进程免于处理这种情况，一种常见的技巧时使服务器进程以读写方式打开众所周知的FIFO.
+  
 
 ### 15.6 XSI IPC
+  有3种称作XSI IPC的IPC: 消息队列、信号量以及共享存储器。它们之间有很多相似之处。本节先介绍它们相类似的特征，后面几节将说明这些IPC各自的特殊功能。
+> XSI IPC函数是紧密的基于System V的IPC函数的。这3种类型的XSI IPC源自于1970年的一种称为Columbus Unix的AT & T内部版本。后来它们被添加到System V上。由于XSI IPC不使用文件系统命名空间，而是构造了它们自己的命名空间，为此常常受到批评。
 
-### 15.7 标识符和key
+#### 15.6.1 标识符和key
+  每个内核中的IPC结构(消息队列、信号量或共享存储段)都用一个非负整数的标识符(identifier)加以引用。例如，要向一个消息队列发送消息或从一个消息队列取消息，只需要知道其队列标志符。与文件描述符不同，IPC标识符不是小的整数。当一个IPC结构被创建，然后又被删除时，与这种结构相关的标识符连续加1，直至达到一个整数的最大正值，然后又回转到0.
+  
+  标识符是IPC对象的内部名。为使多个合作进程能够在同一IPC对象上汇聚，需要提供一个外部命名方案。为此，每个IPC对象都与一个键(key)相关联，将这个键作为该对象的外部名。
+  
+  无论何时创建IPC结构(通过调用msgget,semget或shmget创建)，都应指定
 
-### 15.8 权限结构
+#### 15.6.2 权限结构
 
-### 15.9 配置限制
+#### 15.6.3 配置限制
 
-### 15.10 优点缺点
+#### 15.6.4 优点缺点
 
-### 15.11 内存队列
+### 15.7 内存队列
 
-### 15.12 信号灯
+### 15.8 信号灯
 
-### 15.13 共享内存
+### 15.9 共享内存
 
-### 15.14 POSIX信号灯
+### 15.10 POSIX信号灯
 
-### 15.15 Client-Server属性
+### 15.11 Client-Server属性
 
-### 15.16 总结
+### 15.12 总结
