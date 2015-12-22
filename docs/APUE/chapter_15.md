@@ -879,7 +879,55 @@ ssize_t msgrcv(int msqid, void *ptr, size_t nbytes, long type, int flag);
   
   
 
-### 15.8 信号灯
+### 15.8 信号量
+  信号量与已经介绍过的IPC机构(管道、FIFO以及消息队列)不同。它是一个计数器，用于为多个进程提供对共享数据对象的访问。
+> Single Unix Specification包括了另外一套信号量接口，该接口原来是实时扩展的一部分。我们将在15.10节讨论这种接口。
+
+  为了获得共享资源，进程需要执行下列操作。
+  1. 测试控制该资源的信号量
+  2. 若此信号量的值为正，则进程可以使用该资源。在这种情况下，进程会将信号量值减1，表示它使用了一个资源单位。
+  3. 否则，此信号量的值为0，则进程进入休眠状态，直至信号量大于0.进程被唤醒后，它返回第1步。
+
+  当进程不再使用由一个信号量控制的共享资源时，该信号量值增加1.如果有进程正在休眠等待此信号量，则唤醒它们。
+  
+  为了正确的实现信号量，信号量值的测试及减1操作应该是原子操作。为此，信号量通常是在内核中实现的。
+  
+  常用的信号量形式被称为二元信号量(binary semaphore). 它控制单个资源，其初始值为1. 但是，一般而言，信号量的初值可以是任意一个正值，该值表明有多少个共享资源单位可供共享应用。
+  
+  遗憾的是，XSI信号量与此相比要复杂的多。以下3种特性造成了这种不必要的复杂性。
+  1. 信号量并非是单个非负值，而必须定义为包含有一个或多个信号量值的集合。当创建信号量时，要指定集合中信号量值的数量。
+  2. 信号量的创建(semget)是独立与它的初始化(semctl)的。这是一个致命的缺点，因为不能原子的创建一个信号量集合，并且对该集合中各个信号量值赋初值。
+  3. 即使没有进程正在使用各种形式的XSI IPC, 它们依然是存在的。有的程序在终止时并没有释放已经分配给它的信号量，所以我们不得不为这种程序担心。后面将要说明的undo功能就是处理这种情况的。
+  内核为每隔信号量集合维护着一个semid_ds结构:
+```
+struct semid_ds{
+  struct ipc_perm sem_perm; 
+  unsigned short sem_nsems;
+  time_t sem_otime;
+  time_t sem_ctime;
+  ...
+}
+```
+  Single Unix Specification定义了上面所示的各字段，但是具体实现可在semid_ds结构中定义添加的成员。
+  
+  每个信号量由一个无名结构表示，它至少包含下面成员:
+```
+struct {
+  unsigned short semval;      /** 信号量值，总是大于等于0 **/
+  pid_t sempid;      /** 上次操作的pid **/
+  unsigned short semncnt;    /** # processes awaiting semval > curval **/
+  unsigned short semzcnt;    /** # processes awaiting semval == 0 **/
+  ...
+}
+```
+  下图列出了影响信号量集合的系统限制:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/semapore_sys_limits.png)
+
+  当我们想使用XSI信号量时，首先需要通过调用semget函数来获得一个信号量ID.
+```
+#include <sys/sem.h>
+int semget(key_t, int nsems, int flags);
+```
 
 ### 15.9 共享内存
 
