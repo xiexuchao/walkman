@@ -903,8 +903,8 @@ ssize_t msgrcv(int msqid, void *ptr, size_t nbytes, long type, int flag);
 struct semid_ds{
   struct ipc_perm sem_perm; 
   unsigned short sem_nsems;
-  time_t sem_otime;
-  time_t sem_ctime;
+  time_t sem_otime; /** 上次semop()时间 **/
+  time_t sem_ctime; /** 上次修改时间 **/
   ...
 }
 ```
@@ -928,8 +928,175 @@ struct {
 #include <sys/sem.h>
 int semget(key_t, int nsems, int flags);
 ```
+  15.6.1节说明了将key变换为标识符的规则，讨论了是创建一个新集合，还是引用一个现有集合。创建一个新集合时，要对semid_ds结构的下列成员赋初值。
+  * 按15.6.2节中所述，初始化ipc_perm结构。该结构中的mode成员被设置为flag中的相应权限位。这些权限是15-24中值设置的。
+  * sem_otime设置为0
+  * sem_ctime设置为当前时间
+  * sem_nsems设置为nsems
+  nsems是该集合中信号量数。如果是创建新集合(一般在服务器进程中)，则必须指定nsems. 如果是引用现有集合(一个客户进程)，则nsems指定为0.
 
-### 15.9 共享内存
+  semctl函数包含了多种信号量操作。
+```
+#include <sys/sem.h>
+int semctl(int semid, int semnum, int cmd, ... /* union semun arg */);
+```
+  第四个参数是可选的，是否使用取决于所请求的命令，如果使用该参数，则其类型为semun，它是多个命令特定参数的联合体(union):
+```
+union semun{
+  int val; /** for SETVAL **/
+  struct semid_ds *buf; /** for IPC_STAT and IPC_SET **/
+  struct short *array; /** for GETALL and SETALL **/
+}
+```
+
+  注意，这个选项参数是一个联合体，而非指向联合的指针。
+  
+> 通常应用程序必须定义semun集合。然而，在FreeBSD 8.0中，semun已经由<sys/sem.h>为我们定义好了。
+
+  cmd参数指定下列10种命令中的一种，这些命令是运行在semid指定的信号量集合上的。其中有5种命令是针对一个特定的信号量值的，它们用semnum指定该信号量集合中的一个成员。semnum值在0和nsems-1之间，包括0和semnum-1.
+  * IPC_STAT: 对此集合取semid_ds结构，并存储在由arg.buf指向的结构中。
+  * IPC_SET: 按arg.buf指向的结构中的值，设置与此集合相关的结构中的sem_perm.uid,sem_perm.gid和sem_perm.mode字段。此命令只能由两种进程执行: 一种是其有效用户ID等于sem_perm.cuid或sem_perm.uid的进程。 另一种是具有超级用户特权的进程。
+  * IPC_RMID: 从系统中删除该信号量集合。这种删除是立即发生的。删除时仍在使用此信号量集合的其他进程，在它们试图对此信号集合进行操作时，将出错返回EIDRM。 此命令只能由两种进程执行:  一种是其有效用户ID等于sem_perm.cuid或sem_perm.uid的进程。 另一种是具有超级用户特权的进程。
+  * GETVAL: 返回成员semnum的semval值。
+  * SETVAL: 返回成员semnum的semval值。该值由arg.val指定。
+  * GETPID: 返回成员semnum的sempid值。
+  * GETNCNT: 返回成员semnum的semncnt值。
+  * GETZCNT: 返回成员semnum的semzcnt值。
+  * GETALL: 取该集合中所有的信号量值。这些值存储在arg.array指向的数组中。
+  * SETALL: 将该集合中所有的信号量值设置成arg.array指向的数组中。
+  对于GETALL以外的所有GET命令，semctl函数都返回相应值。对于其他命令，若成功则返回0，若出错，则设置errno并返回-1.
+
+  函数semop()自动执行信号量集合上的操作数组。
+```
+#include <sys/sem.h>
+int semop(int semid, struct sembuf semoparray[1], size_t nops);
+```
+  参数semoparray是一个指针，它指向一个由sembuf结构表示的信号量操作数组:
+```
+struct sembuf{
+  unsigned short sem_num; /** member # in set (0, 1, ..., nsems-1) **/
+  short          sem_op;  /** operation(negative, 0, or pasitive **/
+  short          sem_flg; /** IPC_NOWAIT, SEM_UNDO **/
+};
+```
+  参数nops规定该数组中操作的数量(元素数)。
+  对集合中每个成员的操作由相应的sem_op值规定。此值可以是负值、0或正值。
+  
+### 15.9 共享存储
+  共享存储允许两个或多个进程共享一个给定的存储区。因为数据不需要在客户进程和服务器进程之间复制，所以这是最快的一种IPC.使用共享存储时要掌握的唯一窍门是，在多个进程之间同步访问一个给定存储区。若服务器进程正在将数据放入共享存储区，则在它做完这一操作之前，客户进程不应当去取这些数据。通常，信号量用于同步共享存储访问。(不过正如前节最后部分所述，也可以用记录锁或互斥量。)
+  
+> Single Unix Specification在其存储对象选项中包括了访问共享存储的替代接口，这些接口源于实时扩展。
+
+  我们已经看到了共享存储的一种形式，就是在多个进程将同一个文件映射到它们的地址空间的时候。XSI共享存储和内存映射的不同之处在于，前者没有相关的文件。XSI共享存储段是内存的匿名段。
+  
+  内核为每个共享存储段维持着一个结构，该结构至少要为每个共享段包含以下成员:
+```
+struct shmid_ds{
+  struct ipc_perm shm_perm;
+  size_t shm_segsz; /** 段尺寸，单位字节 **/
+  pid_t shm_lpid; /** 上次shmop()的pid **/
+  pid_t shm_cpid; /** 创建者pid **/
+  shmatt_t shm_nattch; /** 当前附加的数量 **/
+  time_t shm_atime; /** last attach time; **/
+  time_t shm_dtime; /** last detach time; **/
+  time_t shm_ctime; /** last-change time; **/
+  ...
+}
+```
+  (按照支持共享存储段的需要，每种实现会增加其他结构成员。)
+  
+  shmatt_t类型定义为无符号整型，它至少与unsigned short一样大。下图列出了影响共享存储的系统限制。
+  
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/share_memory_sys_limits.png)
+  
+  调用的第一个函数通常是shmget, 它获得一个共享存储标识符号。
+```
+#include <sys/shm.h>
+int shmget(key_t key, size_t size, int flag);
+```
+  15.6.1节说明了将key变换成一个标识符的规则，以及是创建一个新共享存储段，还是引用一个现有的共享存储段。当创建一个新段时，初始化shmid_ds结构的下列成员:
+  * ipc_perm: 类似其他IPC
+  * shm_lpid, shm_nattach, shm_atime和shm_dtime都设置为0
+  * shm_ctime设置为当前时间
+  * shm_segsz设置为请求的size
+  
+  参数size是该共享存储段的长度，以字节为单位。实现通常将其向上取为系统页长的整数倍。但是，若应用指定的size并非系统页长的整数倍，那么最后一页的余下部分是不可使用的。 如果正在创建的一个新段(通常在服务器中)，则必须指定其size. 如果正在引用一个现存的段(一个客户进程)，则size指定为0. 当创建一个新段时，段内的内容初始化为0.
+
+  shmctl函数对共享存储段执行多种操作:
+```
+#include <sys/shm.h>
+int shmctl(int shmid, int cmd, struct shmid_ds *buf);
+```
+  cmd参数指定下列5种命令中的一种，使其在shmid指定的段上执行。
+  * IPC_STAT: 取此段的shmid_ds结构，并将它存储在由buf指向的结构中。
+  * IPC_SET: 按buf指向的结构中的值设置与此共享存储段相关的shmid_ds结构中的下列3个字段: shm_perm.uid, shm_perm.gid, shm_perm.mode. 此命令只能由下列两种进程执行:一种是其有效用户ID等于sem_perm.cuid或sem_perm.uid的进程。 另一种是具有超级用户特权的进程。
+  * IPC_RMID: 从系统删除该共享存储段。因为每个共享存储段维护着一个连接计数(shmid_ds结构中的shm_attch字段)，所以除非使用该段的最后一个进程终止或与该段分离，否则不会实际上删除该存储段。不管此段是否仍在使用，该段标识符都会被立即删除，所以不能在用shmat与该段连接。此命令只能由下列两种进程执行:一种是其有效用户ID等于sem_perm.cuid或sem_perm.uid的进程。 另一种是具有超级用户特权的进程。
+  
+  Linux和Solaris提供了另外两种命令，但它们并非Single Unix Specification的组成部分。
+  * SHM_LOCK: 在内存中对共享存储段加锁。此命令只能由超级用户执行。
+  * SHM_UNLOCK: 解锁共享存储段。此命令只能由超级用户执行。
+  
+  一旦创建了一个共享存储段，进程就可以调用shmat将其连接到它的地址空间中。
+```
+#include <sys/shm.h>
+void *shmat(int shmid, const void *addr, int flag);
+```
+  共享存储段连接到调用进程的那个地址上与addr参数以及flag中是否指定SHM_RND位有关。
+  * 如果addr为0，则此段连接到由内核选择的第一个可用地址上。这是推荐的使用方法。
+  * 如果addr非0，并且没有指定SHM_RND， 则此段连接到addr锁指定的地址上。
+  * 如果addr非0，并且指定了SHM_RND, 则此段连接到(addr - (addr mod SHMLBA))所表示的地址上。SHM_RND命令的意思是取整。SHMLBA的意思是"低边界地址倍数"，它总是2的乘方。该算式是将地址向下取最近一个SHMLBA的倍数。
+  除非只计划在一种硬件上运行应用程序(这在当今是不可能的)，否则不应指定共享存储段所连接到的地址。而是应当指定addr为0，以便由系统选择地址。
+  如果flag中设置了SHM_RDONLY位，则以只读方式连接此段，否则以读写方式连接此段。
+
+  shmat的返回值是该段所连接的实际地址，如果出错则返回-1. 如果shmat成功执行，那么内核将使与该共享存储段相关的shmid_ds结构中的shm_nattch计数器增加1.
+  
+  当对共享存储段的操作已经结束，则调用shmdt与该段分离。注意，这并不从系统中删除其标识符以及其相关的数据结构。该标识符依然存在，知道某个进程(一般是否服务器进程)带IPC_RMID命令的调用shmctl特地的删除它为止。
+  
+```
+#include <sys/shm.h>
+int shmdt(const void *addr);
+```
+  addr参数是以前调用shmat时的返回值。如果成功，shmat将使相关shmid_ds结构中的shm_nattch计数器值减1.
+  
+  实例: 内核将以地址0连接的共享存储段放在什么位置上与系统密切相关。下面程序打印了一些特定系统存放各种类型的数据的位置信息。
+```
+#include "apue.h"
+#include <sys/shm.h>
+
+#define ARRAY_SIZE  40000
+#define MALLOC_SIZE 100000
+#define SHM_SIZE    100000
+#define SHM_MODE    0600 /** user read/write **/
+
+char array[ARRAY_SIZE]; /** uninitialized data = bss **/
+
+int main(void)
+{
+    int shmid;
+    char *ptr, *shmptr;
+
+    printf("array[] from %p to %p\n", (void *)&array[0], (void *)&array[ARRAY_SIZE]);
+    printf("stack around  %p\n", (void *)&shmid);
+
+    if((ptr = malloc(MALLOC_SIZE)) == NULL)
+        err_sys("malloc error");
+    printf("malloced from %p to %p\n", (void *)ptr, (void *)ptr+MALLOC_SIZE);
+
+    if((shmid = shmget(IPC_PRIVATE, SHM_SIZE, SHM_MODE)) < 0)
+        err_sys("shmget error");
+
+    if((shmptr = shmat(shmid, 0, 0)) == (void *)(-1))
+        err_sys("shmat error");
+
+    printf("shared memory attached from %p to %p\n", (void *)shmptr, (void *)shmptr+SHM_SIZE);
+
+    if(shmctl(shmid, IPC_RMID, 0) < 0)
+        err_sys("shmctl error");
+
+    exit(0);
+}
+```
+  
 
 ### 15.10 POSIX信号灯
 
