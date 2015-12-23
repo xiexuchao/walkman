@@ -99,11 +99,122 @@ int shutdown(int sockfd, int how);
 ### 16.3 寻址
   上一节学习了如何创建和销毁一个套接字。在学习用套接字做一些有意义的事情之前，需要知道如何标识一个目标通信进程。进程标识有两部分组成。一部分是计算机的网络地址，她可以帮助标识网络上我们想与之通信的计算机。另一部分是该计算机上用端口号表示的服务，她可以帮助标识特定的进程。
   
-### 16.3.1 字节序
+#### 16.3.1 字节序
   与同一台计算机上的进程进行通信时，一般不用考虑字节序。字节序时一个处理器架构特性，用于指示像整数这样的大数据类型内部的字节如何排序。图16-5显示了一个32位整数中的字节序是如何排序的。
   ![](https://github.com/walkerqiao/walkman/blob/master/images/APUE/bytes_order_in32bit_system.png)
   
   如果处理器架构支持大端字节序，那么最大字节地址出现在最低有效字节上。小端字节序则相反:最低有效字节包含最小字节地址。注意，不管字节如何排序，最高有效字节总在左边，最低有效字节总在右边。因此，如果想给一个32位整数赋值0x04030201,不管字节序如何，最高有效字节都将包含4，最低有效字节都将包含1.
+````
+max ----------------> 0 有效字节
++-+-+-+-+-+-+-+-+-+-+-+
+最大有效字节------->最低有效字节
+
+大端字节序: 最大字节地址出现在最低有效字节上
+小端字节序: 最低字节地址出现在最低有效字节上
+````
+  如果接下来，想将一个字符指针(cp)强制转换到这个整数地址，就会看到字节序带来的不同。在小端字节序的处理器上，cp[0]指向最低有效字节因而包含1，cp[3]指向最高有效字节因而包含4. 而在大端字节的处理器上，cp[0]指向最高有效字节因而包含4，cp[3]指向最低有效字节因而包含1. 下面是本文讨论的4种平台的字节序.
+```
+------------------------------------------------------------------
+操作系统      处理器架构            字节序
+------------------------------------------------------------------
+FreeBSD 8.0   Intel Pentium         小端
+Linux 3.2.0   Intel Core i5         小端
+Mac OS X 10.6.8 Intel Core 2 Duo    小端
+Solaris 10    Sun SPARC             大端
+```
+> 有些处理器可以配置成大端，也可以配置成小端，因而使问题变得更让人困惑。
+
+  网络协议指定了字节序，因此异构计算机系统能够交换协议信息而不会被字节序所混淆。TCP/IP协议栈使用大端字节序。应用程序交换格式化数据时，字节序问题就会出现。对于TCP/IP，地址用网络字节序来表示，所以应用程序有时需要在处理器的字节序与网络字节序之间转换它们。例如，以一种易读的形式打印一个地址时，这种转换很常见。
+  
+  对于TCP/IP应用程序，有4个用来在处理器字节序和网络字节序之间实施转换的函数。
+```
+#include <arpa/inet.h>
+uint32_t htonl(uint32_t hostint32); /** 处理器字节序转网络字节序 长整型32位 **/
+unit16_t htons(uint16_t hostint16); /** 处理器字节序转网络字节序 short类型16位 **/
+uint32_t ntohl(uint32_t netint32); /** 网络字节序转处理器字节序 32位 **/
+uint16_t ntohs(uint16_t netint16); /** 网络字节序转处理器字节序 16位 **/
+```
+
+  h表示主机字节序，n表示网络字节序。l表示长整型(4字节)，s表示短整型(2字节)。 虽然在使用这些函数时包含的是<arpa/inet.h>头文件，但系统实现经常是在其他头文件种声明这些函数的，指示这些头文件都包含在arpa/inet.h中。对于系统来说把这些函数实现为宏也是很常见的。
+  
+#### 16.3.2 地址格式
+  一个地址标识一个特定通信域的套接字端点，地址格式与这个特定的通信域相关。为了使不同格式地址能够传入到套接字函数，地址会被强制转换成一个通用的地址结构sockaddr:
+```
+struct sockaddr{
+  sa_family_t sa_family; /** address family **/
+  char sa_data[]; /** variable-length address **/
+  ...
+}
+```
+  套接字实现可以自由地添加额外地成员并且定义sa_data成员地大小。例如，在Linux中，该结构定义如下:
+```
+struct sockaddr{
+  sa_family_t sal_family; /** address family **/
+  char sa_data[4]; /** variable-length address **/
+}
+```
+  但是在FreeBSD中，该结构定义如下:
+```
+struct sockaddr{
+  unsigned char sa_len; /** total length **/
+  sa_family_t sa_family;
+  char sa_data[4];
+}
+```
+
+  因特网地址定义在<netinet/in.h>头文件中。在IPv4因特网域(AF_INET)中，套接字地址用结构sockaddr_in表示:
+```
+struct in_addr {
+  in_addr_t s_addr; /** IPv4 address **/
+}
+
+struct sockaddr_in {
+  sa_family_t sin_family; /** address family **/
+  in_port_t sin_port; /** port number **/
+  struct in_addr sin_addr; /** IPv4 address **/
+}
+```
+  数据类型in_port_t定义成uint16_t.数据类型in_addr_t定义成uint32_t. 这些整数类型在<stdint.h>中定义并指定了相应地位数。
+  
+  与AF_INET域相比较，IPv6因特网域(AF_INET6)套接字地址用结构sockaddr_in6表示。
+```
+struct in6_addr{
+  uint8_t s6_addr[16]; /** ipv6 address **/
+}
+
+struct sockaddr_in6{
+  sa_family_t sin6_family; /** address family **/
+  in_port_t sin6_port; /** port number **/
+  uint32_t sin6_flowinfo; /** traffic class and flow info **/
+  struct in6_addr sin6_addr; /** IPv6 address **/
+  uint32_t sin6_scope_id; /** set of interfaces for scope **/
+}
+```
+
+  这些都是Single Unix Specification要求地定义。每隔实现可以自由添加更多字段。例如，在Linux中，sockaddr_in定义如下:
+```
+struct sockaddr_in {
+  sa_family_t     sin_family;
+  in_port_t       sin_port;
+  struct in6_addr sin6_addr;          /** ipv4 address **/
+  unsigned char   sin_zero[8];        /** filter **/
+}
+```
+  其中成员sin_zero为填充字段，应该全部被设置为0.
+  
+  注意，尽管sockaddr_in与sockaddr_in6结构相差比较大，但它们均被强制转换成sockaddr结构输入到套接字例程中。在17.2节，将会看到Unix域套接字地址地结构与上述两个因特网套接字地址格式地不同。
+  
+  有时，需要打印出能被人理解而不是计算机所能理解地地址格式。BSD网络软件包含函数inet_addr和inet_ntoa, 用于二进制地址格式与点分十进制字符表示之间地相互转换。 但是这函数仅适用于IPv4地址。有两个新函数inet_ntop和inet_pton具有xiangsi功能，而且同时支持IPv4和IPv6地址。
+  
+```
+#include <arpa/inet.h>
+const char *inet_ntop(int domain, const void *restrict addr, char *restrict str, socklen_t size);
+int inet_pton(int domain, const char *restrict str, void *restrict addr);
+```
+  函数inet_ntop将网络字节序的二进制地址转换成文本字符串格式。inet_pton将文本字符串格式转换成网络字节序的二进制地址。参数domain仅支持两个值: AF_INET和AF_INET6. 
+  
+  对于inet_ntop, 参数size指定了保存文本字符串的缓冲区str的大小。
+
 
 ### 16.4 连接确立
 
