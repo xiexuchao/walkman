@@ -213,7 +213,76 @@ int inet_pton(int domain, const char *restrict str, void *restrict addr);
 ```
   函数inet_ntop将网络字节序的二进制地址转换成文本字符串格式。inet_pton将文本字符串格式转换成网络字节序的二进制地址。参数domain仅支持两个值: AF_INET和AF_INET6. 
   
-  对于inet_ntop, 参数size指定了保存文本字符串的缓冲区str的大小。
+  对于inet_ntop, 参数size指定了保存文本字符串的缓冲区str的大小。两个常数用于简化工作:
+  * INET_ADDRSTRLEN: 定义了足够大的空间来存放一个表示IPv4地址的文本字符串。
+  * INET6_ADDRSTRLEN: 定义了足够大的空间来存放一个表示IPv6地址的文本字符串。
+  对于inet_pton，如果domain是AF_INET, 则缓冲区addr需要足够大的空间来存放一个32位地址，如果domain是AF_INET6, 则需要足够大的空间来存放一个128位地址。
+
+#### 16.3.3 地址查询
+  理想情况下，应用程序不需要了解一个套接字地址内部结构。如果一个程序简单的传输一个类似于sockaddr结构的套接字地址，并且不依赖于任何协议相关的特性，那么可以与提供相同类型服务的许多不同协议协作。
+  
+  历史上，BSD网络软件提供了访问各种网络配置信息的接口。6.7节简要讨论了网络数据文件和用来访问这些文件的函数。本节将更详细的讨论一些细节，并且引入新的函数来查询寻址信息。
+  
+  这些函数返回的网络配置信息被存放在许多地方。这个信息可以存放在静态文件(比如/etc/hosts和/etc/services)中，也可以由名字服务器管理，如域名系统(Domain Name System, DNS)或者网络信息服务(Network Information Service, NIS). 无论这个信息放在何处，都可以用同样的函数访问它。
+  
+  通过调用gethostent，可以找到给定计算机系统的主机信息。
+```
+#include <netdb.h>
+struct hostent *gethostent(void);
+
+void sethostent(int stayopen);
+
+void endhostent(void);
+```
+  如果主机数据库文件没有打开，gethostent会打开它。函数gethostent返回文件中的下一个条目。函数sethostent会打开文件，如果文件已经被打开，那么将其回绕。当stayopen参数设置非0值时，调用gethostent之后，文件依然时打开的。函数endhostent可以关闭文件。
+  
+  当gethostent返回时，会得到一个指向hostent结构的指针，该结构可能包含一个静态的数据缓冲区，每次调用gethostent，缓冲区被覆盖。hostent结构至少包含下列成员:
+```
+struct hostent {
+  char   *h_name; /** name of host **/
+  char  **h_aliases; /** pointer to alternate host name array **/
+  int     h_addrtype; /** address type **/
+  int     h_length;   /** length in bytes of address **/
+  char  **h_addr_list; /** pointer to array of network addresses **/
+  ...
+}
+```
+  返回地址采用网络字节序。
+  
+  另外两个函数gethostbyname和gethostbyaddr, 原来包含在hostent函数中，现在则被认为是过时的。SUSv4已经删除了它们。马上会看到它们的替代函数。
+  
+  能够采用一套相似的接口来获得网络名字和网络编号:
+```
+#include <netdb.h>
+struct netent *getnetbyaddr(uint32_t net, int type);
+struct netent *getnetbyname(const char *name);
+
+struct netent *getnetent(void);
+void setnetent(int stayopen);
+void endnetent(void);
+```
+  netent结构至少包含以下字段:
+```
+struct netent{
+  char   *n_name;    /** network name **/
+  char  **n_aliases  /** alternate network name array pointer **/
+  int     n_addrtype; /** address type **/
+  uint32_t n_net;     /** network number **/
+  ...
+}
+```
+  网络编号按网络字节序返回。地址类型是地址族常量之一(如AF_INET).
+  
+  我们可以用以下函数在协议名字和协议编号之间进行映射。
+```
+#include <netdb.h>
+struct protoent *getprotobyname(const char *name);
+struct protoent *getprotobynumber(int proto);
+struct protoent *getprotoent(void);
+
+void setprotoent(int stayopen);
+void endprotoent(void);
+```
 
 
 ### 16.4 连接确立
