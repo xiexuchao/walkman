@@ -283,7 +283,37 @@ struct protoent *getprotoent(void);
 void setprotoent(int stayopen);
 void endprotoent(void);
 ```
+  POSIX.1定义的protoent结构至少包含以下成员:
+```
+struct protoent {
+  char  *p_name;  /** protocol name **/
+  char **p_aliases; /** pointer to altername protocol name array **/
+  int    p_proto; /** protocol number **/
+  ...
+}
+```
+  服务是由地址的端口号部分表示的。每个服务由一个唯一的众所周知的端口号来支持。可以适用函数getservbyname将一个服务名映射到一个端口号，适用函数getservbyport将一个端口号映射到一个服务名，适用函数getservent顺序扫描服务器数据库。
+  
+```
+#include <netdb.h>
+struct servent *getservbyname(const char *name, const char *proto);
+struct servent *getservbyport(int port, const char *proto);
+struct servent *getservent(void);
 
+void setservent(int stayopen);
+void endservent(void);
+```
+  servent结构至少包含以下成员:
+```
+struct servent{
+  char  *s_name;
+  char **s_aliases;
+  int    s_port;
+  char  *s_proto;
+  ...
+}
+```
+  POSIX.1
 
 ### 16.4 连接确立
 
