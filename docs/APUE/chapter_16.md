@@ -313,7 +313,78 @@ struct servent{
   ...
 }
 ```
-  POSIX.1
+  POSIX.1定义了若干新的函数，允许一个应用程序将一个主机名和一个服务名映射到一个地址，或者反之。这些函数代替了较老的函数gethostbyname和gethostbyaddr。
+  
+  getaddrinfo函数允许将一个主机名和一个服务名映射到一个地址。
+  
+```
+#include <sys/socket.h>
+#include <netdb.h>
+
+int getaddrinfo(const char *restrict host,
+                const char *restrict service,
+                const struct addrinfo *restrict hint,
+                struct addrinfo **restrict res);
+void freeaddrinfo(struct addrinfo *ai);
+```
+  需要提供主机名、服务名，或者两者都提供。如果仅仅提供一个名字，另外一个必须是一个空指针。主机名可以是一个节点名或点分格式的主机名。
+  
+  getaddrinfo函数返回一个链表结构addrinfo. 可以用freeaddrinfo来释放一个或多个这种结构，这取决于ai_next字段连接起来的结构有多少。
+  
+  addrinfo结构定义至少包含以下成员:
+```
+struct addrinfo {
+  int           ai_flags; /** customize behavior **/
+  int           ai_family; /** address family **/
+  int           ai_socktype; /** socket type **/
+  int           ai_protocol; /** protocol **/
+  socklen_t     ai_addrlen; /** length in bytes of address **/
+  struct sockaddr *ai_addr; /** address **/
+  char         *ai_canonname; /** canonical name of host **/
+  struct addrinfo *ai_next;     /** next in the list **/
+}
+```
+  可以提供一个可选的hint来选择符合特定条件的地址。hint是一个用于过滤地址的模版，包括ai_family、ai_flags、ai_protocol和ai_socktype字段。 剩余的整数字段必须设置为0，指针字段必须为空。下面总结了ai_flags字段中的标志，可以用这些标志来自定义如何处理地址和名字:
+```
+标志                描述
+---------------------------------------------------------
+AI_ADDRCONFIG       查询配置的地址类型(IPv4或IPv6)
+AI_ALL              查找IPv4和IPv6地址(仅用于AI_V4MAPPED)
+AI_CANONNAME        需要一个规范的名字(与别名相对)
+AI_NUMERICHOST      以数字格式指定主机地址，不翻译
+AI_NUMERICSERV      将服务指定为数字端口号，不翻译
+AI_PASSIVE          套接字地址用于监听绑定
+AI_V4MAPPED         如没有找到IPv6地址，返回映射到IPv6格式的IPv4地址
+```
+  如果getaddrinfo失败，不能适用perror或strerror来生成错误消息，而是要调用gai_strerror将返回的错误码转换成错误消息。
+```
+#include <netdb.h>
+const char *gai_strerror(int error);
+```
+  getnameinfo函数将一个地址转换成一个主机名和服务名。
+```
+#include <sys/socket.h>
+#include <netdb.h>
+int getnameinfo(const struct sockaddr *restrict addr, socklen_t alen,
+                char *restrict host, socklen_t hostlen,
+                char *restrict service, socklen_t servlen, int flag);
+```
+
+  套接字地址被翻译成一个主机名和一个服务名。如果host非空，则指向一个长度为hostlen字节的缓冲区用于存放返回的主机名。同样，如果service非空，则指向一个长度为servlen字节的缓冲区用于存放返回的主机名。
+  
+  flags参数提供了一些控制翻译的方式。下面总结了支持的标志。
+```
+标志                描述
+-----------------------------------------------------------------------
+NI_DGRAM            服务基于数据报而非基于流
+NI_NAMEREQD         如果找不到主机名，将其作为一个错误对待
+NI_NOFQDN           对于本地主机，仅返回全限定域名的节点名部分
+NI_NUMERICHOST      返回主机地址的数字形式，而非主机名
+NI_NUMERICSCOPE     对于IPv6,返回范围ID的数字形式，而非名字
+NI_NUMERICSERV      返回服务地址的数字形式(即端口号)，而非名字
+```
+  
+  
 
 ### 16.4 连接确立
 
