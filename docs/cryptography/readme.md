@@ -46,7 +46,18 @@
   * ⌈x⌉: 大于或等于x的最小整数
   * |x|: 整数x的长度(= 1 + ⌊log<sub>2</sub>x⌋, x≥1), 也表示x的绝对值
   * Φ(n): n的欧拉函数(Euler)
-  * λ(n): n的
+  * λ(n): n的卡米切尔函数(Carmichael)
+  * ord(x): 群元素的阶
+  * ord<sub>n</sub>(x): (模n下)的x的阶
+  * <g>: 由g生成的循环群
+  * (x/y): 整数x模以整数y的Legendre-Jacobi符号。
+  * J<sub>n</sub>(1): {x|x∈Z<sup>*</sup><sub>n</sub>, (x/n) = 1}
+  * QR<sub>n</sub>: 模整数n的二次剩余集合
+  * QR<sub>n</sub>: 模整数n的二次剩余集合
+  * QNR<sub>n</sub>: 模整数n的二次非剩余集合
+  * deg(P): 多项式P的次数
+  * ∑<sup>n</sup><sub>i=1</sub>v<sub>i</sub>, ∑<sup>n</sup><sub>i∈S</sub>v<sub>i</sub>: 对所有i=1,2,...,n或i∈S, 对数值v<sub>i</sub>求和。
+  * 
 
 #### 第3章 [概率论和信息论](https://github.com/walkerqiao/walkman/blob/master/docs/cryptography/chapter_03.md)
 
