@@ -25,10 +25,28 @@
   * S ⊆ T: S是T的子集
   * #S: 集合S中的元素数目(比如#∅ = 0)
   * x ∈ S, x ∉ S: 元素x属于(不属于)集合S
-  * x ∈u S: 均匀随机的在集合S中选取元素x
+  * x ∈<sub>u</sub> S: 均匀随机的在集合S中选取元素x
   * x ∈ (a, b), x ∈ [a, b]: x属于开区间(a, b)(x属于比区间[a, b])
   * N, Z, Q, R, C: 自然数集、整数集、有理数集、实数集和复数集
-  * Z<sup>*</sup><sub>n</sub>:
+  * Z<sub>n</sub>: 模n的整数
+  * Z<sup>*</sup><sub>n</sub>: 模n的整数乘法群
+  * F<sub>q</sub>: q个元素的有限域
+  * desc(A): 代数结构A的描述
+  * x←D: 根据分布D进行赋值
+  * x←<sub>u</sub>S: 按S为均匀分布进行赋值
+  * a(mod b): 模运算:a被b除所得的余数
+  * x|y, xΧy: 整数y可被(不可被)整数x整除
+  * ≡: 定义为
+  * ∀: 对所有的
+  * ∃: 存在
+  * gcd(x, y): x和y的最大公因子
+  * lcm(x, y): x和y的最小公倍数
+  * log<sub>b</sub>x: x以b为底的对数；b省略则表示自然对数
+  * ⌊x⌋: 小于或等于x的最大整数
+  * ⌈x⌉: 大于或等于x的最小整数
+  * |x|: 整数x的长度(= 1 + ⌊log<sub>2</sub>x⌋, x≥1), 也表示x的绝对值
+  * Φ(n): n的欧拉函数(Euler)
+  * λ(n): n的
 
 #### 第3章 [概率论和信息论](https://github.com/walkerqiao/walkman/blob/master/docs/cryptography/chapter_03.md)
 
