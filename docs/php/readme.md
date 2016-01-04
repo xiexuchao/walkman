@@ -126,6 +126,45 @@ ext/
   
   
 ### 基本组成
+  C是现代定义的非常低级的语言。这意味着没有很多内置的支持可让PHP过渡的(granted), 例如反射机制，动态模块加载，边界检查，线程安全数据管理以及各种有用的数据结构包括链表和hash表。 同时，C也是语言支持和功能的共同标准。 给予足够努力，这些概念没有什么不可能实现的； Zend引擎就使用了所有这些概念。
+  
+  大量努力已经付出，使得Zend api既具扩展型又易于理解，但是C强制特定必要声明于各种扩展之上， 对于不太有经验的视角来看似乎有些冗余和不必要。 所有本节中这些组成，通常都写过一次，而在zend 2, 3中忘记掉了。 这里有一些例外， 由php5.3的ext_skel预先生成的php_counter.h和counter.c文件， 显示了预先生成声明:
+> 注意， 精明的读者可能会注意到在文件中有几个声明展示。 这些声明特定于各种Zend子系统，以及必要的时候会讨论的。
+
+```
+extern zend_module_entry counter_module_entry;
+#define phpext_counter_ptr &counter_module_entry;
+
+#ifdef PHP_WIN32
+#define PHP_COUNTER_API __declspec(dllexport)
+#elif defined(__GNUC__) && __GNUC__ >= 4
+#define PHP_COUNTER_API __attribute__ ((visibility("default")))
+#else
+#define PHP_COUNTER_API
+#endif
+
+#ifdef ZTS
+#include "TSRM.h"
+#enif
+
+#include "php.h"
+#include "php_ini.h"
+#include "ext/standard/info.h"
+#include "php_counter.h"
+
+/** ... **/
+#ifdef COMPILE_DL_COUNTER
+ZEND_GET_MODULE(counter)
+#endif
+```
+  * counter_module_entry相关的行声明了全局变量，并且一个宏指针指向它， 这个包含了扩展的zend_module_entry。 尽管后面讨论真正全局的弊端，这种使用依然是愿意的，Zend使用这种预防措施是为了避免变量的误用。
+  * PHP_COUNTER_API声明用于模块想要暴露给其他模块使用的非PHP函数。counter扩展没有声明这些，在最后版本的header文件中，这个宏会被删除掉。PHPAIP宏声明一样可以被标准扩展使用使得phpinfo()工具函数对其他模块可用。
+  * TSRM.h头文件的包含，如果php或者扩展不是以线程安全模式编译的话，被跳过，这里使用ZTS来检测。
+  * 标准的头文件包含列表，特别是扩展自己的php_counter.h文件被给定。 config.h给定了扩展访问来确定configure所产生。 php.h是进入PHP和ZEND API的网关。php_ini.h添加API运行时配置入口。 并不是所有扩展都需要它。 最后,ext/standard/info.h导入前面说的phpinfo()工具API的东西。
+  * COMPILE_DL_COUNTER仅由configure来定义，如果counter扩展既是启用的，而且是作为动态加载模块而非直接连接到PHP的。 ZEND_GET_MODULE定义了小函数，Zend可以用来在运行时获取扩展的zend_module_entry。
+
+> 注意：细心的读者可能深入到main/php_config.h， 在尝试构建counter模块静态启用可能注意到那里会有一个HAV_COUNTER常量定义，有些源代码不检查。 这是简单理由，这个检查没有做:它没有必要。 如果扩展没有启用，源代码文件根本不会被编译。
+
 
   
   
