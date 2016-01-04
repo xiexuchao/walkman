@@ -65,6 +65,27 @@ PHP_FUNCTION(venus_string)
   * PHP_SUBST: 用于说明这个扩展编译成动态链接库的形式
   * PHP_NEW_EXTENSION: 用于指定有哪些源文件应该被编译,文件和文件之间用空格隔开
 
+  PHP_ARG_**: 这些给configure提供了可选项，在运行./configure --help时显示的帮助文本。就像名称暗示的，其两者不同之处在于--with-xxx还是--enable-xxx。每个扩展应提供至少一个以上的选项以及扩展名称，以便用户可选择是否将扩展构建至PHP中。按惯例，PHP_ARG_WITH()用于取得参数的选项，例如扩展所需库或程序的位置；而PHP_ARG_ENABLE()用于代表简单标志的选项。
+```
+$ ./configure --help
+...
+  --with-example[=FILE]       Include example support. FILE is the optional path to example-config
+  --enable-example-debug        example: Enable debugging support in example
+  --with-example-extra=DIR      example: Location of extra libraries for example
+...
+
+$ ./configure --with-example=/some/library/path/example-config --disable-example-debug --with-example-extra=/another/library/path
+...
+checking for example support... yes
+checking whether to enable debugging support in example... no
+checking for extra libraries for example... /another/library/path
+...
+```
+>在调用 configure 时，不管选项在命令行中的顺序如何，都会按在 config.m4 中指定的顺序进行检测。
+
+  参考连接：http://www.php.net/manual/zh/internals2.buildsys.configunix.php
+  
+### php
 
   
   
