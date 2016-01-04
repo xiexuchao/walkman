@@ -21,6 +21,7 @@
   7. [鸟哥私房菜](https://github.com/walkerqiao/walkman/blob/master/docs/vbird/readme.md)
   8. [Linux程序设计](https://github.com/walkerqiao/walkman/blob/master/docs/linux_prog/readme.md)
   9. [现代密码学](https://github.com/walkerqiao/walkman/blob/master/docs/cryptography/readme.md)
+  10. [PHP扩展开发](https://github.com/walkerqiao/walkman/blob/master/docs/php/readme.md)
   
 
 
