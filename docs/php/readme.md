@@ -85,8 +85,47 @@ checking for extra libraries for example... /another/library/path
 
   参考连接：http://www.php.net/manual/zh/internals2.buildsys.configunix.php
   
-### php
-
+### 扩展的结构
+  不管是通过手工，还是通过ext_skel，还是通过另外的扩展生成器，例如CodeGen, 所有的扩展至少有四个文件:
+  * config.m4: Unix构建系统配置
+  * config.w32: Windows构建系统配置
+  * php_xxx.h: 当将扩展作为静态模块构建并放入php二进制包时，构建系统要求用php_加扩展名称命名的头文件包含一个对扩展模块结构的指针定义。就像其他头文件，此文件经常包含附加的宏、原型和全局量。
+  * xxx.c: 主要的扩展源文件。按惯例，此文件名就是扩展的名称，但不是必须的。此文件包含模块结构定义、INI条目、管理函数、用户空间函数和其他扩展所需的内容。
   
+  构建系统的文件在别处讨论，本节关注于其余的部分。扩展应包含任意数量的头文件、源文件、单元测试和其他支持文件， 此四个文件仅够组成最小的扩展。 下面列举counter扩展的文件列表:
+```
+ext/
+ counter/
+  .cvsignore
+  config.m4
+  config.w32
+  counter_util.h
+  counter_util.c
+  php_counter.h
+  counter.c
+  package.xml
+  CREDITS
+  tests/
+   critical_function_001.phpt
+   critical_function_002.phpt
+   optional_function_001.phpt
+   optional_function_002.phpt
+```
+  非源文件
+  .cvsignore文件用于已检入一个php cvs资源库(通常是PECL)的扩展，由ext_skel生成这个文件内容如下:
+```
+.deps
+*.lo
+*.la
+```
+  这几行告诉CVS要忽略由PHP构建系统生成的临时文件。这只是惯例，可以被完全省略掉且无不良影响。
+  
+  CREDITS文件用纯文本格式列出了扩展的贡献者和(或)维护者。此文件的主要用途是为了为已捆绑的扩展生成被phpcredits()所使用的荣誉信息。按惯例，文件的第一行应保存扩展的名称，第二行使用逗号分割的贡献者名单。贡献者通常是按其贡献物的时间顺序。例如，在PECL包中，此信息已经维护在package.xml中了。 这就是可以被省略且无不良影响的其他文件。
+  
+  package.xml文件是基于PECL的扩展特有的，是一个元信息文件，记录了扩展的依赖关系、作者、安装需求和其他有价值的信息。对于不是基于PECL的扩展来说，此文件就无关紧要了。
+  
+  
+### 基本组成
+
   
   
