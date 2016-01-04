@@ -47,7 +47,7 @@ PHP_FUNCTION(venus_string)
   
   最后测试扩展。 将venus.php拷贝到web根目录，测试ok.
   
-### 总结
+### PHP扩展开发总结
   PHP扩展开发非常简单，总结如下:
   1. 使用ext_skel工具产生模块骨架目录结构
   2. 修改config.m4文件， 该文件是后面编译的重点，后面介绍。
@@ -56,4 +56,16 @@ PHP_FUNCTION(venus_string)
   5. 测试模块
   
 
+### config.m4简介
+  * dnl: 以该符号开头的行为注释行
+  * PHP_ARG_WITH或者PHP_ARG_ENABLE: 指定了PHP扩展模块的工作方式
+  * PHP_REQUIRE_CXX: 用于指定这个扩展用到了C++
+  * PHP_ADD_INCLUDE: 指定PHP扩展模块用到的头文件目录
+  * PHP_CHECK_LIBRARY: 指定PHP扩展模块PHP_ADD_LIBRARY_WITH_PATH定义以及库连接错误信息等
+  * PHP_SUBST: 用于说明这个扩展编译成动态链接库的形式
+  * PHP_NEW_EXTENSION: 用于指定有哪些源文件应该被编译,文件和文件之间用空格隔开
+
+
+  
+  
   
