@@ -165,6 +165,69 @@ ZEND_GET_MODULE(counter)
 
 > 注意：细心的读者可能深入到main/php_config.h， 在尝试构建counter模块静态启用可能注意到那里会有一个HAV_COUNTER常量定义，有些源代码不检查。 这是简单理由，这个检查没有做:它没有必要。 如果扩展没有启用，源代码文件根本不会被编译。
 
+### zend_module结构
+  PHP扩展的主文件包含几个C程序员新的结构。最重要的三个是: 首先接触的是在启动新扩展的时候，就是zend_module结构。 这个结构包含一个告诉Zend引擎关于扩展依赖、版本、回调、以及其他重要数据的宝藏。 随着时间的推移，这个结构发生了突变；这一节我们关注这个结构，基于php5.2之后， 并且在php5.3有非常小的变动。
+  
+  counter.c中的zend_module声明看起来类似下面的代码。 这个例子是由ext_skel工具生成的， 删除了一些过时的结构。
+```
+zend_module_entry counter_module_entry {
+  STANDARD_MODULE_HEADER,
+  "counter",
+  counter_functions,
+  PHP_MINIT(counter),
+  PHP_MSHUTDOWN(counter),
+  PHP_RINIT(counter),
+  PHP_RSHUTDOWN(counter),
+  PHP_MINFO(counter),
+  "0.1", /** replace with version number for your extensions **/
+  STANDARD_MODULE_PROPERTIES
+};
+```
+  
+  这卡一看令人却步， 但是该结构的很多成员都非常容易理解。 这里是zend_module的声明(php5.3 zend_modules.h)
+```
+struct _zend_module_entry{
+  unsigned short size;
+  unsigned int zend_api;
+  unsigned char zend_debug;
+  unsigned char zts;
+  const struct _zend_ini_entry *ini_entry;
+  const struct _zend_module_dep *deps;
+  const char *name;
+  const struct _zend_function_entry *functions;
+  int (*module_startup_func)(INIT_FUNC_ARGS);
+  int (*module_shutdown_func)(SHUTDOWN_FUNC_ARGS);
+  int (*request_startup_func)(INIT_FUNC_ARGS);
+  int (*request_shutdown_func)(SHUTDOWN_FUNC_ARGS);
+  void (*info_func)(ZEND_MODULE_INFO_FUNC_ARGS);
+  const char *version;
+  size_t globals_size;
+#ifdef ZTS
+  ts_rsrc_id* globals_id_ptr;
+#else
+  void* globals_ptr;
+#endif
+  void (*globals_ctor)(void *global TSRMLS_DS);
+  void (*globals_dtor)(void *global TSRMLS_DS);
+  int module_started;
+  unsigned char type;
+  void *handle;
+  int module_number;
+};
+```
+  很多对于扩展开发者来说，根本不会碰触到。有一些标准宏会自动为它们设置恰当的值。宏STANDARD_MODULE_HEADER文件包含了直到deps字段的所有。相应的, STANDARD_MODULE_HEADER_EX会将deps留空，以便开发者自己使用。 开发者通常负责name到version之间的字段。在version之后，STANDARD_MODULE_PROPERTIES宏会填充剩下的结构，或者STANDARD_MODULE_PROPERTIES_EX宏可用于让globals和post-deactivation功能字段不填充。很多现代扩展会使用模块全局变量。
+  
+> 注意： 下面表给出了每个字段可以允许开发者填充的值， 每个字段一个，没有使用所写宏的方式。 这不是推荐的方式。正确的方式是只填充那些可能变化的字段。 尽可能的使用宏。
 
-  
-  
+```
+字段            值                                描述
+-----------------------------------------------------------------------------------
+size            sizeof(zend_module_entry)         结构的字节长度
+zend_api        ZEND_MODULE_API_NO                该模块被编译的Zend API版本
+zend_debug      ZEND_DEBUG                        标志，表明模块是否需要使用调试开始的方式编译
+zts             USING_ZTS                         标识表明是否该模块需要使用线程安全开启编译
+ini_entry       NULL                              这个指针用于zend内部来保持非局部引用到该模块声明的任意INI实体
+deps            NULL                              指向模块依赖列表的指针
+name            "mymodule"                        模块的名称。这个是简短名称，例如"spl"或"standard".
+functions       mymodule_functions                指向模块函数表的指针， zend用于向用户空间暴露功能。
+```
