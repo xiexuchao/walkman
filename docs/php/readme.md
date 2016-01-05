@@ -220,14 +220,57 @@ struct _zend_module_entry{
 > 注意： 下面表给出了每个字段可以允许开发者填充的值， 每个字段一个，没有使用所写宏的方式。 这不是推荐的方式。正确的方式是只填充那些可能变化的字段。 尽可能的使用宏。
 
 ```
-字段            值                                描述
+字段                  值                                描述
 -----------------------------------------------------------------------------------
-size            sizeof(zend_module_entry)         结构的字节长度
-zend_api        ZEND_MODULE_API_NO                该模块被编译的Zend API版本
-zend_debug      ZEND_DEBUG                        标志，表明模块是否需要使用调试开始的方式编译
-zts             USING_ZTS                         标识表明是否该模块需要使用线程安全开启编译
-ini_entry       NULL                              这个指针用于zend内部来保持非局部引用到该模块声明的任意INI实体
-deps            NULL                              指向模块依赖列表的指针
-name            "mymodule"                        模块的名称。这个是简短名称，例如"spl"或"standard".
-functions       mymodule_functions                指向模块函数表的指针， zend用于向用户空间暴露功能。
+size                  sizeof(zend_module_entry)         结构的字节长度
+zend_api              ZEND_MODULE_API_NO                该模块被编译的Zend API版本
+zend_debug            ZEND_DEBUG                        标志，表明模块是否需要使用调试开始的方式编译
+zts                   USING_ZTS                         标识表明是否该模块需要使用线程安全开启编译
+ini_entry             NULL                              这个指针用于zend内部来保持非局部引用到该模块声明的任意INI实体
+deps                  NULL                              指向模块依赖列表的指针
+name                  "mymodule"                        模块的名称。这个是简短名称，例如"spl"或"standard".
+functions             mymodule_functions                指向模块函数表的指针， zend用于向用户空间暴露功能。
+module_startup_func   PHP_MINIT(mymodule)               回调函数，Zend会在模块载入php特定实例时首先调用。
+module_shutdown_func  PHP_MSHUTDOWN(mymodule)           回调函数，Zend会在特定PHP实例卸载模块的时候调用
+request_startup_func  PHP_RINIT(mymodule)               回调函数，Zend会在每隔请求开始的时候调用。它应尽可能的短或者NULL， 因为每个请求都会有消耗
+request_shutdown_func PHP_RSHUTDOWN(mymodule)           回调函数, Zend会在每个请求结束的时候调用. 它也应该尽可能的简短,或者为NULL, 因为每个请求调用它还是有代价的。
+info_func             PHP_MINFO(mymodule)               回调函数, 当phpinfo()函数被调用的时候，Zend会调用它
+version               NO_VERSION_YET                    模块版本号的字符串， 由模块开发者指定。 推荐版本数字符合version_compare()期望的。(例如: "1.0.5-dev"), 或CVS或SVN版本号(比如: $Rev: 322138 $)
+global_size           sizeof(zend_mymodule_globals)     包含模块全局变量的数据结构的尺寸，如果有全局变量的话
+globals_id_ptr        &mymodule_globals_id              |只有这两个字段中的一个存在， 依赖于是否使用USING_ZTS常量为TRUE. 
+globals_ptr           &mymodule_globals                 |前一个是模块全局变量在TSRM的分配表中的索引,后面的是直接指向全局变量的指针。
+globals_ctor          PHP_GINIT(mymodule)               这个函数在任意module_startup_func之前初始化模块的全局变量
+globals_dtor          PHP_GSHUTDOWN(mymodule)           这个函数在任意module_shutdown_func之后取消模块全局变量的分配
+post_deactivate_func  ZEND_MODULE_POST_ZEND_DEACTIVATE_N(mymodule) 这个函数在请求shutdown之后被调用。 它很少使用
+module_started        0                                 
+type                  0                                 这些字段用于Zend内部追踪信息
+handle                NULL
+module_number         0 
 ```
+
+  特定情况下的结构填充
+  使用所有的这些字段，可能比较困惑用于什么目的。 下面是zend_module对counter的定义例子， 更新的最后形式:
+```
+zend_module_entry counter_module_entry = {
+  STANDARD_MODULE_HEADER,
+  "counter",
+  counter_functions,
+  PHP_MINIT(counter),
+  PHP_MSHUTDOWN(counter),
+  PHP_RINIT(counter),
+  PHP_RSHUTDOWN(counter),
+  PHP_MINFO(counter),
+  NO_VERSION_YET,
+  PHP_MODULE_GLOBALS(counter),
+  PHP_GINIT(counter),
+  PHP_GSHUTDOWN(counter),
+  NULL,
+  STANDARD_MODULE_PROPERTIES_EX
+};
+```
+  * STANDARD_MODULE_HEADER在模块没有定义任何依赖关系的时候使用
+  * counter是扩展的名称， 用于定义各种传给Zend的回调函数。 "counter"在启动和关闭时候使用模块， 全局变量，以及请求函数， 以及为phpinfo()提供信息，因此所有的7个回调函数被定义了。
+  * 假设有一种类型为zend_function_entry *的变量命名为counter_functions. 包含在包含模块定义的文件开头位置，包含了模块暴露给用户空间的函数列表
+  * NO_VERSION_YET是一种特别方便的方式告诉Zend该模块尚未有版本号。 实际模块正确的方式可能是放1.0到这个地方。
+  * counter使用每个模块的全局变量，因此使用PHP_MODULE_GLOBALS.
+  * 
