@@ -412,3 +412,8 @@ PHP_MINFO_FUNCTION(counter)
   php_info_print_table_end();
 }
 ```
+
+### 扩展测试
+  好程序的一个可接受需求是测试。 PHP提供了单元测试， 以调用run-tests.php的方式。
+  
+  特定模块的测试存放在tests/子目录中，使用.phpt扩展。详细可参见http://qa.php.net/
