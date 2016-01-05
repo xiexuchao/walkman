@@ -341,4 +341,74 @@ ZEND_DECLARE_MODULE_GLOBALS(counter)
 #define COUNTER_G(v) (counter_globals.v)
 #endif
 ```
-> 注意：
+
+  下面是新版本的counter_get()代码：
+```
+/** php_counter.h **/
+ZEND_BEGIN_MODULE_GLOBALS(counter)
+  long basic_counter_value;
+ZEND_END_MODULE_GLOBALS(counter)
+
+#ifdef ZTS
+#define COUNTER_G(v) TSRMG(counter_globals_id, zend_counter_globals *, v)
+#else
+#define COUNTER_G(v) (counter_globals.v)
+#endif
+
+/** counter.c **/
+ZEND_DECLARE_MODULE_GLOBALS(counter)
+
+/** ... **/
+PHP_FUNCTION(counter_get)
+{
+  RETURN_LONG(COUNTER_G(basic_counter_value));
+}
+```
+
+  这是一个正确的实现。
+  
+### 扩展的生命周期
+  PHP扩展在其生命周期中经历数个步骤。 所有这些步骤都给开发者执行各种初始化、终止或者信息功能的机会。Zend API允许对扩展存在的五个单独步骤进行挂钩， 而不用调用PHP函数。
+  
+#### 加载、卸载及请求
+  随着Zend引擎的运行，它处理来自客户端的一个或多个请求。 在传统的CLI实现中，相应于进程的一个执行。然而，很多其他实现，最值得注意的是Apache模块，可以映射很多请求到单个PHP进程上。 PHP扩展可以因此在其生命周期中看到很多请求。
+  
+#### 概览
+  * 在Zend API中，模块仅仅在相关的PHP进程启动的时候一次加载到内存中。 每个模块接受到一个模块初始化的函数调用，这个函数在zend_module中指定， 在加载的时候执行。
+  * 不管什么时间相关的PHP进程启动处理来自客户端的请求-- 例如，当php解释器被告知开始工作--每个模块接收到一个请求初始化的函数调用，这个函数也是在zend_module中指定的。
+  * 当相关的PHP进程完成一个请求的处理，每个模块接受到请求终止的函数调用。同样也是在zend_module中指定的。
+  * 当相关PHP进程关闭给定模块从内存中按一定顺序卸载， 模块会接收到模块终止函数调用，同样也是在zend_module中指定的。
+
+#### 做什么，什么时候做??
+  在这四个阶段可以有很多任务可执行。 下面的表陈述了一些通用的初始化和终止任务的所属关系:
+```
+模块初始化/终止                   请求初始化/终止
+分配/释放以及初始化模块全局变量   分配/释放以及初始化特定请求的变量
+注册/注销类实体
+注册/注销ini实体
+注册常量
+```
+
+#### phpinfo()回调
+  除了全局初始化和特定很少使用的回调，有一个模块生命周期的一部分来检查:调用phpinfo(). 从这个调用输出用户可见，是否文本或HTML或者其他一些格式，这些是在调用时候由每个加载到php解释器的独立扩展产生的。
+  
+  为了提供格式化自然输出， 头ext/standard/info.h提供了一个函数数组来产生标准显示元素。特别的， 几个创建熟悉的既存表格的函数如下:
+  * php_info_print_table_start(): 在phpinfo()输出中打开一个table. 不带参数
+  * php_info_print_table_header(): 在phpinfo()输出中打印一个table头。 接受一个参数，列数目，加上同样数目的char *参数，这些作为每个列的头。
+  * php_info_print_table_row(): 在phpinfo()输出中打印表行。 接受一个参数，列数目，加上相同数目的char *参数，即每个列的文本内容。
+  * php_info_print_table_end(): 关闭php_info_print_table_start()开启的表开始。不带参数。
+  
+  使用这四个函数，可以产生扩展特性组合的状态信息。这些信息就是counter扩展回调信息。
+
+```
+PHP_MINFO_FUNCTION(counter)
+{
+  char buf[10];
+  
+  php_info_print_table_start();
+  php_info_print_table_row(2, "counter support", "enabled");
+  snprintf(buf, sizeof(buf), "%ld", COUNTER_G(basic_counter_value));
+  php_info_print_table_row(2, "Basic counter value", buf);
+  php_info_print_table_end();
+}
+```
