@@ -272,5 +272,73 @@ zend_module_entry counter_module_entry = {
   * counter是扩展的名称， 用于定义各种传给Zend的回调函数。 "counter"在启动和关闭时候使用模块， 全局变量，以及请求函数， 以及为phpinfo()提供信息，因此所有的7个回调函数被定义了。
   * 假设有一种类型为zend_function_entry *的变量命名为counter_functions. 包含在包含模块定义的文件开头位置，包含了模块暴露给用户空间的函数列表
   * NO_VERSION_YET是一种特别方便的方式告诉Zend该模块尚未有版本号。 实际模块正确的方式可能是放1.0到这个地方。
-  * counter使用每个模块的全局变量，因此使用PHP_MODULE_GLOBALS.
-  * 
+  * counter使用单个模块的全局变量，因此使用PHP_MODULE_GLOBALS.
+  * 这个模块没有post-deactivate函数，所以使用NULL
+  * 既然这个模块使用全局变量，STANDARD_MODULE_PROPERTIES_EX被使用来填充结构
+  
+### 扩展全局变量
+  PHP扩展全局变量介绍
+  在诸如C语言中，全局变量是可以在任意函数中访问，而无需额外声明的。 这些传统全局变量有一些缺点:
+  * 除非有特殊的选项传给编译器，否则全局变量可以在程序中的任意片段访问和改变，而不管那些代码是否应该如此。
+  * 经典传统变量不是线程安全的。
+  * 全局变量名称尽可能作为变量自身是全局的
+  
+> 例1 存储基本的counter接口值的错误方式
+```
+static long basic_counter_value;
+PHP_FUNCTION(counter_get)
+{
+  RETURN_LONG(basic_counter_value);
+}
+```
+  表面上看这是一个可行的解决方案，并且确实测试其功能也正确。 然而，如果一些情况，php在相同的线程中有多个拷贝，那就意味者有多个counter模块。 这些多线程突然共享同一个counter值， 很明显不是所希望的。 另外一个问题就是当考虑另一个扩展可能有一天碰巧具有相同名字的全局变量，因为C的作用域规则，这就会导致潜在的编译错误，或者更加坏的情况， 运行时错误。 需要更加复杂的解决方案，因此存在Zend的线程安全单个模块的全局变量支持。
+  
+#### 声明模块全局变量
+  不管模块是使用一个全局变量还是一打全局变量，他们都必须定义到一个结构中， 并且那个结构需要声明。有一些宏帮助做这些， 因此可以避免模块间名字冲突: ZEND_BEGIN_MODULE_GLOBALS(), ZEND_END_MODULE_GLOBALS()和ZEND_DECLARE_MODULE_GLOBALS(). 这三个宏都带一个模块名的简短名称，这在counter模块中仅仅是简单的counter. 这里是在php_counter.h中声明的全局结构:
+```
+ZEND_BEGIN_MODULE_GLOBALS(counter)
+  long baisc_counter_value;
+ZEND_END_MODULE_GLOBALS(counter)
+
+>>>
+  typedef struct _zend_##module_name##_globals { /** begin **/
+    long basic_counter_value;
+  } zend_##module_name##_globals;       /** end **/
+```
+  下面是在counter模块中的全局结构声明:
+```
+ZEND_DECLARE_MODULE_GLOBALS(counter)
+
+>>>
+#ifdef ZTS
+
+#define ZEND_DECLARE_MODULE_GLOBALS(module_name)                     \                                                                                                         
+   ts_rsrc_id module_name##_globals_id;
+#define ZEND_EXTERN_MODULE_GLOBALS(module_name)                        \
+   extern ts_rsrc_id module_name##_globals_id;
+#define ZEND_INIT_MODULE_GLOBALS(module_name, globals_ctor, globals_dtor)   \
+   ts_allocate_id(&module_name##_globals_id, sizeof(zend_##module_name##_globals), (ts_allocate_ctor) globals_ctor, (ts_allocate_dtor) globals_dtor);
+
+#else
+
+#define ZEND_DECLARE_MODULE_GLOBALS(module_name)                     \
+   zend_##module_name##_globals module_name##_globals;
+#define ZEND_EXTERN_MODULE_GLOBALS(module_name)                        \
+   extern zend_##module_name##_globals module_name##_globals;
+#define ZEND_INIT_MODULE_GLOBALS(module_name, globals_ctor, globals_dtor)   \
+   globals_ctor(&module_name##_globals);
+
+#endif
+```
+
+#### 访问模块全局变量
+  正如上面所讨论的，每个模块的全局变量都是定义在C结构体中，这个结构体的名字使用Zend宏遮蔽起来。 那么， 实际访问结构的成员也是用宏来实现。 当然了，大多数而非全部扩展都在头文件中使用上述声明方式。
+  
+```
+#ifdef ZTS
+#define COUNTER_G(v) TSRMG(counter_globals_id, zend_counter_globals *, v)
+#else
+#define COUNTER_G(v) (counter_globals.v)
+#endif
+```
+> 注意：
