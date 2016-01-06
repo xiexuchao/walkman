@@ -152,11 +152,75 @@ PHP_MSHUTDOWN_FUNCTION(myextension)
 ==================================
 
 #### 生命周期
+  每个PHP实例，无论是从init脚本开始，还是从命令行开始，都遵循一些列前面介绍的Request/Module, Init/Shutdown的事件串，以及脚本自身的实际执行。 每个启动和关闭阶段执行的次数、频率都依赖于使用的SAPI. 四个最常见的SAPI配置是CLI/CGI, 多进程模块、多线程模块以及嵌入式。
+  
+##### CLI生命周期
+  CLI(和CGI)在其单个请求生命周期相对独特的；然而，模块与请求步骤依然遵循离散循环。下图展示了在命令行调用脚本test.php的进展情况。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/php/cli_php_life_cycle.png)
 
-
+##### 多进程生命周期
+  最常见的PHP嵌入web服务器的配置是使用PHP作为apache 1的APXS模块或apache 2中使用Pre-fork MPM。 很多其他web服务器配置也是这种情况，就是本书中所谓的多进程模型。
+  
+  称之为多进程模型是因为apache启动的时候，立即fork几个子进程，每个子进程都有自己的进程空间，并且功能互相独立。 在给定的子进程中， PHP实例的生命周期看起来就像下图所示。唯一变化的就是多个请求位于单个MINIT/MSHUTDOWN对之间。
+  
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/php/single_apache_php_life_cycle.png)
+  
+  这个模型不允许任何一个子进程意识到其他子进程所拥有的数据， 虽然它确实允许子进程die以及按需替换而不影响其他子进程的稳定。下图显示了单个apache调用以及调用它们每个自己的MINIT, MSHUTDOWN，RINIT, RSHUTDOWN的多个子进程。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/php/mpm_php_life_cycle.png)
+  
+##### 多线程生命周期
+  越来越多的，PHP在多线程web服务器配置中出现，例如IIS的ISAPI接口，以及apache2的Worker MPM. 在多线程web服务器中，同一时间只有一个进程在运行。但是在那个进程中有多线程同时执行。这允许多位开销，包括重复调用MINIT/MSHUTDOWN得以避免，真正的全局数据被分配以及仅仅初始化一次，以及潜在打开的多个请求确定性共享信息的大门。下图展示了当运行在多线程web服务器，例如apache2中使用PHP发生的并行处理流。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/php/multi_thread_php_life_cycle.png)
+  
+##### 嵌入式生命周期
+  回忆一下，嵌入SAPI就是另外一个SAPI实现，和CLI, APXS或ISAPI接口遵循相同的规则， 很容易想象，请求的生命周期遵循相同的基本路径: 模块初始化=>请求初始化=>请求=>请求关闭=>模块关闭。 确实，嵌入SAPI完全遵循它兄弟姐妹同样的这些步骤。
+  
+  让嵌入式SAPI单独出现的原因是请求可以被分为多个脚本片段，这些功能作为单个请求的一部分。控制也将在PHP和调用应用程序之间基于最多的配置来回传递多次。
+  
+  虽然嵌入请求可能由单个或多个元素组成，嵌入应用程序都是面向同一个请求独立的必要条件作为web服务器。为了处理两个或多个同时嵌入的环境， 应用程序将需要像apache1或apache2的线程一样。尝试处理两个单独请求环境在单个非线程进程空间会导致意想不到的结果，并且当然不需要的。
+  
 ==================================
 
 #### Zend线程安全
+  当PHP刚起步的时候，它作为单个CGI进程运行，那么不关心线程安全，因为没有进程空间可以比单个请求更加长寿。内部变量可以被生命在全局空间并且可以任意访问和改变而不会有任何后果，只要它们的内容被正确的初始化了。任何没有清理正确的资源也将在进程终止的时候被释放。
+
+  后来，PHP嵌入到多进程web服务器，比如apache。给定的内部变量仍然可以定义在全局并且可以被活动请求安全访问，只要它在每个请求开始的时候被正确的初始化，以及在结束的时候清理掉，因为每个进程空间一次只能有一个请求为激活状态。这个点上来说，每个请求的内存管理被添加防止资源泄漏而失去控制。
+  
+  随着单进程多线程web服务器开始出现，那么新的处理全局数据的方法就必要了。最终，这个将出现一个新的层叫做TSRM(线程安全资源管理)。
+  
+##### 线程安全与非线程安全定义
+  在简单的非线程安全应用程序中，你可能喜欢通过将变量放在源代码文件的顶部来声明全局变量。 编译器将为你的应用程序在数据段分配一个内存块来保存那个信息单元。
+  
+  在多线程应用中，么么线程都需要它自己的数据元素版本，必要分配一个单独的内存块给每个线程。 给定线程然后在需要数据的时候从正确的内存块取用数据，从那个指针来引用数据。
+  
+##### 线程安全数据池
+  在扩展的MINIT阶段，TSRM层使用一次或多次ts_allocate_id()函数调用来被通知有多少数据将需要被存储。TSRM添加那个字节计数到运行中的必要数据空间总数，然后返回线程数据池的那个段部分的一个新的，唯一的标识符。
+```
+typedef struct {
+  int sampleint;
+  char *samplestring;
+} php_sample_globals;
+
+int smaple_globals_id;
+
+PHP_MINIT_FUNCTION(sample)
+{
+  ts_allocate_id(&sample_globals_id,
+    sizeof(php_sample_globals),
+    (ts_allocate_ctor) php_sample_globals_ctor,
+    (ts_allocate_dtor) php_sample_globals_dtor);
+    
+  return SUCCESS;
+}
+```
+  当是时候在请求中访问数据段，扩展为当前线程资源池从TSRM层请求一个指针，通过ts_allocate_id()返回的资源ID暗示获取恰当的索引建议。
+  
+  用另外一种方式，以代码流的术语，下面的语句SAMPLE_G(sampleint) = 5;就是你可以看到的，在之前的MINIT语句中联系的模块，在线程安全版本下面， 这个语句通过一系列宏扩展为下面的情况:
+  `(((php_sample_globals*)(*((void ***)tsrm_ls))[sample_global_id - 1])->sampleint = 5`
+  
+  不用担心如果你对解析上面的语句有问题。它和PHPSAPI集成的相当好，因此有些开发者根本不需要了解它如何工作。
+##### 什么情况下不要用线程
+
 
 ==================================
 
