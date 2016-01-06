@@ -166,7 +166,7 @@ PHP_MSHUTDOWN_FUNCTION(myextension)
   ![](https://github.com/walkerqiao/walkman/blob/master/images/php/single_apache_php_life_cycle.png)
   
   这个模型不允许任何一个子进程意识到其他子进程所拥有的数据， 虽然它确实允许子进程die以及按需替换而不影响其他子进程的稳定。下图显示了单个apache调用以及调用它们每个自己的MINIT, MSHUTDOWN，RINIT, RSHUTDOWN的多个子进程。
-  ![](https://github.com/walkerqiao/walkman/blob/master/images/php/mpm_php_life_cycle.png)
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/php/mpm_php_lify_cycle.png)
   
 ##### 多线程生命周期
   越来越多的，PHP在多线程web服务器配置中出现，例如IIS的ISAPI接口，以及apache2的Worker MPM. 在多线程web服务器中，同一时间只有一个进程在运行。但是在那个进程中有多线程同时执行。这允许多位开销，包括重复调用MINIT/MSHUTDOWN得以避免，真正的全局数据被分配以及仅仅初始化一次，以及潜在打开的多个请求确定性共享信息的大门。下图展示了当运行在多线程web服务器，例如apache2中使用PHP发生的并行处理流。
