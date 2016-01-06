@@ -220,8 +220,107 @@ PHP_MINIT_FUNCTION(sample)
   
   不用担心如果你对解析上面的语句有问题。它和PHPSAPI集成的相当好，因此有些开发者根本不需要了解它如何工作。
 ##### 什么情况下不要用线程
+  因为PHP使用线程安全构建访问全局变量涉及到在正确的数据池中查询正确的偏移量的开销，因此会比非线程安全的慢一些， 因为它的数据直接从编译时间的真正全局地址取出。
+  再考虑下前面的例子，这次我们使用非线程安全构建:
+```
+typedef struct {
+  int sampleint;
+  char *samplestring;
+} php_sample_globals;
+php_sample_globals sample_globals;
+PHP_MINIT_FUNCTION(sample)
+{
+  php_sample_globals_ctor(&sample_globals TSRMLS_CC);
+  return SUCCESS;
+}
+```
+  首先注意到，这里没有使用int来标识全局结构的引用，而是直接定义了一个全局结构在进程的全局作用域中。 这意味着SAMPLE_G(sampleint) = 5;语句仅仅需要暴露为sample_globals.sampleint = 5;. 简单、快速、有效。
+  
+  非线程构建也具有进程鼓励的优势，因此如果给定请求遇到完全预期不到的情况，它可以依然拯救既是段错误也不会带来整个服务器的崩溃。事实上，Apache的MaxRequestPerChild指令设计就是采用这种效果的优势，经常故意杀死它的子进程，然后孵化新的子进程替换它们。
+  
+##### 无关的全局访问(Agnostic Globals Access)
+  当创建扩展，你不必要知道是否获取的构建环境是否为线程安全的。幸运的是，你将使用的包含文件的部分标准集定义了ZTS预处理序列。 当PHP构建为线程安全的，或者因为SAPI需要如此， 或者通过enable-maintainer-zts选项，这个值会自动定义，并且可以使用`#ifdef ZTS`指令来测试。
+  
+  正如你不久前看到的， 只有在实际存在的线程池中分配才有意义，并且只有PHP被编译为线程安全的时候才有意义。这就是为什么前面的例子都要使用ZTS测试包围起来，对于非线程安全的相应的叫做非线程安全构建。
+  
+  在本章前面你看到的PHP_MINIT_FUNCTION(myextension)例子，`#ifdef ZTS`用于条件性调用正确的全局变量初始化代码本本。 对于ZTS模式，使用ts_allocate_id()来产生myextension_globals_id变量，对于非线程安全模式，仅仅调用myextension_globals的初始化方法。 这里两个变量也需要在扩展源代码中使用ZEND宏DECLARE_MODULE_GLOBALS(myextension);它会自动处理ZTS测试，以及依赖ZTS是否启用来声明正确的恰当的主机变量。
 
+  当访问这些全局变量的时候，你会使用一个自定义宏例如SAMPLE_G()来取变量。 在12章，你会了解到如何来设计这个宏来依赖ZTS扩展正确的形式。
 
+##### 线程即使你不得不(Threading Even When You Don't Have To)
+  通常PHP构建默认是将线程安全关闭的，只有在SAPI被构建为需要线程安全的情况，或者线程安全通过./configure开关明确的打开。
+  
+  鉴于全局查询的效率问题以及缺乏进程孤立，你可能想要知道为什么有些人还要故意打开TSRM开关，即使它们根本不需要。最大程度在于，扩展和SAPI开发者就像你即将变成那些希望开启线程安全为了确保新代码会在所有环境下面工作ok.
+  
+  当线程安全启用，特定指针，叫做tsrm_ls被添加到很多内部函数的原型中。 这个指针允许PHP区分另外一个线程相关的数据。你可以回忆使用SAMPLE_G()宏在ZTS模式下。没有它， 执行函数将不知道到那个符号表中查询，以及在哪个符号表设置值。 甚至不可能知道哪个脚本在执行，以及引擎将完全没有能力跟踪它的内部注册器。 这个指针可以分离一个线程和另外一个线程处理页面请求。
+  
+  这个指针参数是可选的包含在原型中，通过一系列的define集合。当ZTS禁用时，这些定义都计算为空；当打开时，看起来就像下面这样:
+```
+#define TSRMLS_D  void ***tsrm_ls
+#define TSRMLS_DC , void ***tsrm_ls
+#define TSRMLS_C  tsrm_ls
+#define TSRMLS_CC , tsrm_ls
+```
+  下面代码中非线程构建看到仅仅两个参数，int和char *, 而在ZTS构建中，原型包含了三个参数，int, char *, void ***。 当程序调用这个函数的时候，需要传入这个参数，但是仅仅针对ZTS启用的构建。下面的第二行代码展示了如何使用CC宏完成那些。
+```
+int php_myext_action(int action_id, char *message TSRMLS_DC);
+php_myext_action(42, "The message of life" TSRMLS_CC);
+```
+> 这里自己总结下_D: declare, _DC declare-with-comma, _C call, _CC call-with-comma. 不一定正确， 记忆应该有效， 哈哈。
+
+  通过在函数调用中包含特殊的变量，php_myext_function将有能力结合MYEXT_G()宏使用tsrm_ls的值访问他的线程安全方面的全局数据。对于非线程安全，tsrm_ls将不可用，但是因为MYEXT_G()，或者其他类似的宏，将没有使用到这个变量。
+  
+  现在想象一下你在写一个新的扩展，你有下面的函数在你本地的CLI SAPI工作的非常漂亮，甚至使用apache 1的apxs SAPI编译了都ok.
+```
+static int php_myext_isset(char *varname, int valname_len)
+{
+  zval **dummy;
+  if(zend_hash_find(EG(active_symbol_table),
+    varname, varname_len + 1,
+    (void **)&dummy) == SUCCESS) {
+    /** Variable exists */
+    return 1;
+  } else {
+    /** Undefined variable **/
+    return 0;
+  }
+}
+```
+
+  很满意，所有的都工作良好， 当你打包你的扩展发送到另外一个办公点来构建并运行在生产服务器上。沮丧啊，远程办公室报告扩展编译失败。
+  
+  实际上它们正在使用Apache 2.0，以线程安全的方式构建，因此ZTS启用了。当编译器遇到你的代码使用EG()宏，它视图在本地作用域查找tsrm_ls，但是找不到，因为你没有声明它， 也没有传给你的函数。
+  
+  当然修复非常简单，仅仅添加下TSRMLS_DC到php_myext_isset()声明里边，然后把TSRMLS_CC扔到每一个调用的行上。 不幸的是，远程办公项目组有点怀疑你的扩展质量，你不得不拖延两周发布。 如果这个问题能今早发现多好。
+  
+  这也就是enable-maintainer-zts的来由。 当构建的时候通过添加这一行到你的./configure语句，你构建会自动加载ZTS，即使你当前的SAPI，比如CLI，不需要它。 启用这个开关，你能避免常见而不必要的编程错误。
+  
+> 注意在PHP4， enable-maintainer-zts标识是enable-experimental-zts; 要仔细看好你的PHP版本以及标志的名称。
+
+##### 查找丢失的tsrm_ls
+  有时候，刚好不太可能传入tsrm_ls指针到需要它的函数里边。通常这是因为你的扩展接口使用一种使用回调函数并且不提供抽象指针返回的门的类库。 考虑下面的代码片段:
+```
+void php_myext_event_callback(int eventtype, char *message)
+{
+  zval *event;
+  
+  /* $event = array('event' => $eventtype, 'message' => $message) */
+  MAKE_STD_ZVAL(event);
+  array_init(event);
+  add_assoc_long(event, "type", eventtype);
+  add_assoc_string(event, "message", message, 1);
+  
+  /** $eventlog[] = $event; **/
+  add_next_index_zval(EXT_G(eventlog), event);
+}
+PHP_FUNCTION(myext_startloop)
+{
+  /* the eventlib_loopme()函数, */
+  eventlib_loopme(php_myext_event_callback);
+}
+```
+
+  
 ==================================
 
 #### 总结
