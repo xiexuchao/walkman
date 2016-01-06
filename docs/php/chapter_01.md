@@ -92,9 +92,62 @@ PHP_MINIT_FUNCTION(myextension)
   * 预先产生的变量放到符号表中
   * 记录页面请求日志到文件
   
+  RINIT方法可能期望像下面的代码:
+```
+/**
+ * 每个页面请求的开始时候运行
+ */
+PHP_RINIT_FUNCTION(myextension)
+{
+  zval *myext_autoglobal;
+  
+  /**
+   * 初始化在MINIT中声明的自动全局变量为数组。
+   * 等价于执行$_MYEXTENSION = array();
+   */
+  ALLOC_INIT_ZVAL(myext_autoglobal);
+  array_init(myext_autoglobal);
+  zend_hash_add(&EG(symbol_table), "_MYEXTENSION", sizeof("_MYEXTENSION") - 1,
+    (void**)&myext_autoglobal, sizeof(zval*), NULL);
+  return SUCCESS;
+}
+```
+  在请求处理完成，或者到达脚本文件的最后一行，或者通过die(), exit()退出，PHP通过调用每个扩展的RSHUTDOWN(Request Shutdown)方法启动清理进程。RSHUTDOWN相应于auto_append_file，就像RINIT相应于auto_prepend_file指令一样。RSHUTDOWN和auto_append_file指令最大的不同在于，RSHUTDOWN总是被执行，而在用户空间调用die()或exit()，会跳过auto_append_file指令的执行。
+  
+  最后一分钟需要在符号表和其他资源销毁之前执行的可以放在RSHUTDOWN中。在所有RSHUTDOWN方法执行完成，符号表中的每个变量都被明确的unset(), 在这之间所有非持久资源和对象析构被调用为了优雅的释放资源。
+  
+```
+/**
+ * 在每个页面请求结束的时候运行
+ */
+PHP_RSHUTDOWN_FUNCTION(myextension)
+{
+  zval **myext_autoglobal;
+  
+  if(zend_hash_find(&EG(symbol_table), "_MYEXTENSION", sizeof("_MYEXTENSION"), 
+    (void **)&myext_autoglobal) == SUCCESS) {
+    /**
+     * 使用$_MYEXTENSION数组做一些有意义的事情
+     */
+    php_myextension_handle_values(myext_autoglobal TSRMLS_CC);
+  }
+  return SUCCESS;
+}
+```
 
-
-
+  最后，当所有请求都完成，web服务器或者其他SAPI准备关闭，PHP循环每个扩展的MSHUTDOWN方法。这是扩展在MINIT周期最后一次机会注销处理器以及释放持久内存非配。
+```
+/*
+ * 该模块准备卸载，常量及函数将会被自动清楚，持久资源，类实例，以及流处理器必须手工注销掉。
+ */
+PHP_MSHUTDOWN_FUNCTION(myextension)
+{
+  UNREGISTER_INI_ENTRIES();
+  php_unregister_url_stream_wrapper("myproto" TSRMLS_CC);
+  php_stream_filter_unregister_factory("myfilter" TSRMLS_CC);
+  return SUCCESS;
+}
+```
 
 ==================================
 
