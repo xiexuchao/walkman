@@ -19,4 +19,4 @@
   有四个常见的需要扩展PHP的原因。到目前为止，最常见的原因是链接外部库并暴露它的API给用户空间脚本。 这个动机在mysql扩展中可看到， 它就是将libmysqlclient类库来提供mysql_*()家族的函数给PHP脚本。
   
   这种类型的扩展就是描述PHP为胶水的开发者所引用的。扩展执行的组成代码和自身的执行没有明显的度；二十，仅仅创建了PHP扩展API和类库暴露的API间的桥梁。没有这些，PHP和诸如libmysqlclient之类的类库将不能在同一个层级通信。 下图就展示了这种类型扩展架起了第三方类库和PHP核心之间的桥梁。
-  
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/php/glue_extensions.png)
