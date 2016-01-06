@@ -7,6 +7,16 @@
 
 ----------------------------
 ### 数据类型
+  PHP中数据存储单元基础就是所谓的zval, 或者称为Zend Value. 它非常简单，定义在Zend/zend.h头文件中， 有四个字段，格式如下:
+```
+typedef struct _zval_struct {
+  zvalue_value value;
+  zend_uint refcount;
+  zend_uchar type;
+  zend_uchar is_ref;
+} zval;
+```
+  
 
 ============================
 
