@@ -169,17 +169,75 @@ ZVAL_RESOURCE(pzv, res);       Z_TYPE_P(pzv) = IS_RESOURCE;
 ```
 
   回忆一下前面的资源在zval里边仅仅使用一个整型存储。因此ZVAL_RESOURCE()和ZVAL_LONG()宏扮演的行为一致，只是使用的类型不同而已。
-  
 
 ===========================
 
 
 ### 数据存储
+  你已经在用户空间使用过PHP的一些东西，那么你应该比较熟悉数组。数个PHP变量(zval)可以放入单个容器中(array), 并给每个元素一个数字或字符串作为名字。
+  
+  PHP中每个单独变量都能在数组中找到这种希望并不奇怪。当你创建变量的时候，通过赋一个值给它，Zend存储这个值到内部数组，即所谓的符号表(symbol table).
+  
+  在符号表(也就是定义全局作用域的表)是在请求启动的点，在扩展的RINIT被调用之前， 然后在脚本完成，后续的RSHUTDOWN方法被执行之后销毁。
+  
+  当用户空间函数或对象被调用，为那个函数或方法分配新的符号表， 被定义为活动符号表(active symbol table). 如果当前脚本执行不是函数或方法， 全局符号表被认为是活动的。
+  
+  看一看扩展执行globals结构(在Zend/zend_globals.h中定义)， 你将找到下面两个元素定义:
+```
+struct _zend_execution_globals {
+  ...
+  HashTable symbol_table;
+  HashTable *active_symbol_table;
+  ...
+}
+```
+  symbol_table，使用EG(symbol_table)访问， 总是全局变量作用域就像用户空间的$GLOBALS变量总是相应于PHP脚本的全局作用域。 实际上，从内部来看$GLOBALS变量仅仅是用户空间里边对EG(symbol_table)变量的包装。
+  
+  另外一个变量active_symbol_table， 类似通过EG(active_symbol_table)来访问， 代表那些在此刻活跃的那些变量作用域。
+  
+  这里需要注意的关键不同是EG(symbol_table), 不像你在使用PHP和Zend APIs使用和遇到的其他的HashTable，直接是一个变量。 几乎所有在HashTable上操作的函数，期望一个直接的HashTable *作为它们的参数。 因此，使用EG(symbol_table)作为那些函数的参数时，需要使用&取地址。
+  
+  考虑下面的两个代码块， 功能相同:
+```
+<?php $foo = 'bar'; ?>
+```
+
+  用C实现:
+```
+{
+  zval *fooval;
+  MAKE_STD_ZVAL(fooval);
+  ZVAL_STRING(fooval, "bar", 1);
+  ZEND_SET_SYMBOL(EG(active_symbol_table), "foo", fooval);
+}
+```
+
+  首先，使用MAKE_STD_ZVAL()分配一个新的zval, 然后初始化其值为"bar", 然后使用一个新宏，等价于(=)赋值操作， 使用标签foo组合那个值， 然后将它添加到活跃的符号表中。 因为当前没有用户空间函数是活跃的，EG(active_symbol_table) == &EG(symbol_table), 这最终意思就是改变量被存储在全局作用域中。
 
 ==========================
 
 
 ### 数据检索
+  为了从用户空间检索数据， 需要查找它们存储在哪些符号表中。 下面代码展示了使用zend_hash_find()函数达到这个目的。
+```
+{
+  zval **fooval;
+  
+  if(zend_hash_find(EG(active_symbol_table),
+    "foo", sizeof("foo"),
+    (void**)&fooval) == SUCCESS) {
+    php_printf("Got the value of $foo!");
+  } else {
+    php_printf("$foo is not defined.");
+  }
+}
+```
+
+  这个例子的一些部分看起来有点滑稽。 为什么fooval定义为两级间接引用? 为什么使用sizeof()来确定foo的长度?为什么计算zval***，强制转换为void**? 如果问你自己这三个问题，拍拍你自己的背.
+  
+  首先， 值得了解的是HashTable不仅仅用于用户空间变量。 HashTable结构那么多才多艺，它用于整个引擎，在某些情况下，使得想要存储非指针值变得非常完美。 HashTable的桶是固定大小的，然而，为了存储任意尺寸的数据，HashTable将分配一块内存来包装待存数据。 在变量的情况下，zval*被存储，因此HashTable存储机制分配了一块内存足够大去容纳指针。HashTable的桶使用这个带有zval*的新指针，那么你能有效在HashTable内部使用zval**结束。 下一章介绍HashTable明显有能力存储zval,而实际却存储zval*. 
+  
+  
 
 ==========================
 
