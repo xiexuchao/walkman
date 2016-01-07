@@ -118,7 +118,7 @@ void display_string(zval *zstr)
 ### 数据创建
   到目前为止，你知道如何从zval中取出所需数据，是时候创建一些你自己的数据了。 虽然zval能在函数顶部简单声明为直接变量， 它将使得变量数据存储局部性，为了离开函数到达用户空间， 需要对其进行拷贝。
   
-  因为你几乎总是希望你创建的zval以某种形式到达用户空间，你将要分配一块内存并赋值这个块给zval*指针。再一次很明显，解决方案使用malloc(sizeof(zval))不是正确的答案。 相反，你将使用另外一个Zend宏: MAKE_STD_ZVAL(pzv). 这个宏将在其他zval旁边以优化的内存块分配空间， 自动处理内存不足的问题(下一章会介绍这块), 并初始化新zval的refcount和is_ref属性。
+  `因为你几乎总是希望你创建的zval以某种形式到达用户空间，你将要分配一块内存并赋值这个块给zval*指针。再一次很明显，解决方案使用malloc(sizeof(zval))不是正确的答案。 相反，你将使用另外一个Zend宏: MAKE_STD_ZVAL(pzv). 这个宏将在其他zval旁边以优化的内存块分配空间， 自动处理内存不足的问题(下一章会介绍这块), 并初始化新zval的refcount和is_ref属性。`
 > 注意: 除了MAKE_STD_ZVAL(), 你会经常看到PHP源代码中另外一个zval*创建宏:ALLOC_INIT_ZVAL(). 这个宏和MAKE_STD_ZVAL()的区别仅仅在于，初始化zval *的数据类型为IS_NULL;
 
   一旦数据存储空间可用， 是时候为你全新的zval产生一些信息。 在前面数据存储上读取部分，你可能都准备使用Z_TYPE_P()和Z_SOMEVAL_P()宏来设置你的新变量。看起来这个明显的解决方案正确的?
@@ -138,7 +138,7 @@ ZVAL_TRUE(pzv);   ZVAL_BOOL(pzv, 1);
 ZVAL_FALSE(pzv);  ZVAL_BOOL(pzv, 0);
 ```
 
-  注意，任何非零值提供给ZVAL_BOOL()都会导致返回true事实。这很明显，因为任何非零值类型在用户空间都被强制转换为布尔类型。当硬编码到内部代码中， 最好明确使用1作为true事实。 宏ZVAL_TRUE()和ZVAL_FALSE()提供了这种便利，有时候让代码更加易于理解。
+  `注意，任何非零值提供给ZVAL_BOOL()都会导致返回true事实。这很明显，因为任何非零值类型在用户空间都被强制转换为布尔类型。当硬编码到内部代码中， 最好明确使用1作为true事实。 宏ZVAL_TRUE()和ZVAL_FALSE()提供了这种便利，有时候让代码更加易于理解。`
   
 ```
 ZVAL_LONG(pzv, l);    Z_TYPE_P(pzv) = IS_LONG;
@@ -191,11 +191,11 @@ struct _zend_execution_globals {
   ...
 }
 ```
-  symbol_table，使用EG(symbol_table)访问， 总是全局变量作用域就像用户空间的$GLOBALS变量总是相应于PHP脚本的全局作用域。 实际上，从内部来看$GLOBALS变量仅仅是用户空间里边对EG(symbol_table)变量的包装。
+  `symbol_table，使用EG(symbol_table)访问， 总是全局变量作用域就像用户空间的$GLOBALS变量总是相应于PHP脚本的全局作用域。 实际上，从内部来看$GLOBALS变量仅仅是用户空间里边对EG(symbol_table)变量的包装。`
   
-  另外一个变量active_symbol_table， 类似通过EG(active_symbol_table)来访问， 代表那些在此刻活跃的那些变量作用域。
+  `另外一个变量active_symbol_table， 类似通过EG(active_symbol_table)来访问， 代表那些在此刻活跃的那些变量作用域。`
   
-  这里需要注意的关键不同是EG(symbol_table), 不像你在使用PHP和Zend APIs使用和遇到的其他的HashTable，直接是一个变量。 几乎所有在HashTable上操作的函数，期望一个直接的HashTable *作为它们的参数。 因此，使用EG(symbol_table)作为那些函数的参数时，需要使用&取地址。
+  `这里需要注意的关键不同是EG(symbol_table), 不像你在使用PHP和Zend APIs使用和遇到的其他的HashTable，直接是一个变量。 几乎所有在HashTable上操作的函数，期望一个直接的HashTable *作为它们的参数。` 因此，使用EG(symbol_table)作为那些函数的参数时，需要使用&取地址。
   
   考虑下面的两个代码块， 功能相同:
 ```
@@ -233,9 +233,9 @@ struct _zend_execution_globals {
 }
 ```
 
-  这个例子的一些部分看起来有点滑稽。 为什么fooval定义为两级间接引用? 为什么使用sizeof()来确定foo的长度?为什么计算zval***，强制转换为void**? 如果问你自己这三个问题，拍拍你自己的背.
+  这个例子的一些部分看起来有点滑稽。 为什么fooval定义为两级间接引用? 为什么使用sizeof()来确定foo的长度?`为什么计算zval***，强制转换为void**?` 如果问你自己这三个问题，拍拍你自己的背.
   
-  首先， 值得了解的是HashTable不仅仅用于用户空间变量。 HashTable结构那么多才多艺，它用于整个引擎，在某些情况下，使得想要存储非指针值变得非常完美。 HashTable的桶是固定大小的，然而，为了存储任意尺寸的数据，HashTable将分配一块内存来包装待存数据。 在变量的情况下，zval*被存储，因此HashTable存储机制分配了一块内存足够大去容纳指针。HashTable的桶使用这个带有zval*的新指针，那么你能有效在HashTable内部使用zval**结束。 下一章介绍HashTable明显有能力存储zval,而实际却存储zval*. 
+  首先， 值得了解的是HashTable不仅仅用于用户空间变量。 HashTable结构那么多才多艺，它用于整个引擎，在某些情况下，使得想要存储非指针值变得非常完美。 HashTable的桶是固定大小的，然而，为了存储任意尺寸的数据，HashTable将分配一块内存来包装待存数据。 在变量的情况下，`zval*被存储，因此HashTable存储机制分配了一块内存足够大去容纳指针。HashTable的桶使用这个带有zval*的新指针，那么你能有效在HashTable内部使用zval**结束。 下一章介绍HashTable明显有能力存储zval,而实际却存储zval*. `
   
   
 
