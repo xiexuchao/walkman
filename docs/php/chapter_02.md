@@ -16,7 +16,23 @@ typedef struct _zval_struct {
   zend_uchar is_ref;
 } zval;
 ```
-  
+  应该从直觉上可以知道这些成员中的大部分是基本存储类型: refcount无符号整型，type无符号字符类型，is_ref无符号字符类型。而value成员实际上是一个联合体定义，PHP5中定义如下:
+```
+typedef union _zvalue_value {
+  long lval;
+  double dval;
+  struct {
+    char *val;
+    int len;
+  } str;
+  HashTable *ht;
+  zend_object_value obj;
+} zvalue_value;
+```
+  这个联合体允许Zend存储PHP很多不同类型的变量，有能力存储单个，统一结构的变量。
+  Zend当前定义了8种类型的数据，如下所示:
+  * IS_NULL: 该类型在变量首次使用时自动赋值给未初始化的变量， 也可以明确的在用户空间使用内置NULL常量赋值给变量。该变量类型提供了一个特殊的"non-value", 该值和布尔值FALSE和整数0相区别开来。
+  * IS_BOOL: 布尔变量可以具有两种可能性，要么为TRUE, 要么为FALSE. 用户空间的控制结构if, while, 三元操作符(ternary), for中的条件表达式隐含的在计算时将条件转换为布尔类型。
 
 ============================
 
