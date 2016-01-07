@@ -237,12 +237,61 @@ struct _zend_execution_globals {
   
   首先， 值得了解的是HashTable不仅仅用于用户空间变量。 HashTable结构那么多才多艺，它用于整个引擎，在某些情况下，使得想要存储非指针值变得非常完美。 HashTable的桶是固定大小的，然而，为了存储任意尺寸的数据，HashTable将分配一块内存来包装待存数据。 在变量的情况下，`zval*被存储，因此HashTable存储机制分配了一块内存足够大去容纳指针。HashTable的桶使用这个带有zval*的新指针，那么你能有效在HashTable内部使用zval**结束。 下一章介绍HashTable明显有能力存储zval,而实际却存储zval*. `
   
+  `当尝试检索数据，HashTable只知道他有一个到某些东西的指针。为了将那个指针填充到调用函数的局部存储里边， 调用函数自然需要对局部指针取地址， 结果出现了不确定类型的变量，使用了两层间接音容(例如void**)。 知道你的不确定类型这种情况下为zval*, 你可以看到传入zend_hash_find()的类型将看起来与编译器不同，具有三级间接引用，而非二级间接引用。 这里这么做的目的就是简单的添加到函数调用让编译器警告忽略掉。`
   
+  上面例子中代码使用sizeof()用于包含用于标签的"foo"常量的终止符NULL.这里使用4，一样工作ok, 然而，不鼓励这样，因为标签名变化可能影响它的长度，并且很容易找到哪些长度是硬编码的，如果包含有标签文本可以被随意替换。(strlen("foo") + 1)也能解决这个问题，然而，有些编译器不优化这一步， 结果二进制可能在执行无知真字符串长度循环终止，将会发生什么玩笑呢?
+  
+  如果zend_hash_find()定位你要找的项， 它填充使用分配的桶指针的地址提供的指针的地址，当请求的数据首次被添加到HashTable, 并返回一个整型值，匹配SUCCESS常数。如果zend_hash_find()不能定位数据，那么旧不动那个指针而离开，返回一个整数值匹配FAILURE常量。
+  
+  这种情况下，用户空间变量存储在符号表中， SUCCESS或FAILURE有效的意味着变量的存在与否。
 
 ==========================
 
 
 ### 数据转换
+  现在你能在符号表中取变量了， 那么你想使用它们做一些事情。 直接但痛苦的方法是检查变量类型并依赖特定类型执行特定操作。 一个简单的类似下面的语句就可以工作:
+```
+void display_zval(zval *value)
+{
+  switch(Z_TYPE_P(value)) {
+    case IS_NULL:
+      /** NULL什么也不输出 **/
+      break;
+    case IS_BOOL:
+      if(Z_BVAL_P(value)) {
+        php_printf("1");
+      }
+      break;
+    case IS_LONG:
+      php_printf("%ld", Z_LVAL_P(value));
+      break;
+    case IS_STRING:
+      PHPWRITE(Z_STRVAL_P(value), Z_STRLEN_P(value));
+      break;
+    case IS_RESOURCE:
+      php_printf("Resource #%ld", Z_RESVAL_P(value));
+      break;
+    case IS_ARRAY:
+      php_printf("Array");
+      break;
+    case IS_OBJECT:
+      php_printf("Object");
+      break;
+    default:
+      php_printf("Unknown");
+      break;
+  }
+}
+```
+  耶！很好简单。相比`<?php echo $value;?>`不难想象这个代码变的不易管理。幸运的是，引擎使用的同样的例程当脚本执行打印变量的时候，也是变量到扩展或嵌入环境。 使用下面的一种Zend暴露的convert_to_*()函数， 这个例子可以减少到这么简单:
+```
+void display_zval(zval *value)
+{
+  convert_to_string(value);
+  PHPWRITE(Z_STRVAL_P(value), Z_STRLEN_P(value));
+}
+```
+  你可能会猜测，这里有一个集合函数准换大多数数据类型。 一个例外是convert_to_resource(), 
 
 =========================
 
