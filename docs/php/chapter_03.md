@@ -5,6 +5,16 @@
 -------------------------
 
 #### 内存
+  在PHP中，产生一个字符串变量非常简单`<?php $str = "hello world";?>`, 并且字符串可以随意修改，赋值，移动。 另一方面，在C语言中，虽然你能使用诸如此类的`char *str = "hello world";`, 这个字符串不能修改，因为它位于程序空间。要创建一个可操作字符串，你将不得不分配一块内存以及通过诸如strdup()这样的函数拷贝这些内容。
+```
+{
+  char *str;
+  str = strdup("hello world");
+  if(!str) {
+    fprintf(stderr, "Unable to allocate memory!");
+  }
+}
+```
 
 
 ===========================
