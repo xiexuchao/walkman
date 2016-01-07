@@ -33,15 +33,143 @@ typedef union _zvalue_value {
   Zend当前定义了8种类型的数据，如下所示:
   * IS_NULL: 该类型在变量首次使用时自动赋值给未初始化的变量， 也可以明确的在用户空间使用内置NULL常量赋值给变量。该变量类型提供了一个特殊的"non-value", 该值和布尔值FALSE和整数0相区别开来。
   * IS_BOOL: 布尔变量可以具有两种可能性，要么为TRUE, 要么为FALSE. 用户空间的控制结构if, while, 三元操作符(ternary), for中的条件表达式隐含的在计算时将条件转换为布尔类型。
+  * IS_LONG: PHP中的整型类型，使用主机系统的有符号整型(signed long)数据类型。 在大多数32位平台这个量存储范围为-2147483648到+2147483647. 有一点例外，当用户空间脚本尝试存储整型值超过这个范围，自动被转换为双精度浮点数类型(IS_DOUBLE)
+  * IS_DOUBLE: 浮点数据类型使用主机系统的有符号双精度数据类型(signed double). 浮点数存储没有确切的精度；值范围，最小2.225*10^(-308)到最大限制大约在1.798*10^308， 8字节表示。
+  * IS_STRING: PHP的最通用数据类型是字符串，存储于方式和老练的C程序员期望的一样。一块内存区域，足够大保存字符串的所有字节/字符，为字符串分配一个指针存储在宿主zval中。
+  * IS_ARRAY: 
+  * IS_OBJECT:
+  * IS_RESOURCE:
+  
+  上面的IS_*存储于元素的zval结构的type域下面，确定zval结构中元素value的那部分是它的值。
+
+  最明显的检查值类型的方式可能是从给定的zval对其解除引用，用下面的代码片段:
+```
+void describe_zval(zval *foo)
+{
+  if(foo->type == IS_NULL) {
+    php_printf("The variable is NULL");
+  } else {
+    php_printf("The variable is of type %d", foo->type);
+  }
+}
+```
+  很明显，但是错了。
+  那么好，不是错误，但是至少不是最优的方式。 Zend头文件包含了大量的zval访问宏，扩展作者希望使用它们来检测zval数据。 基本原因在于避免不兼容，当如果引擎的API发生了改变，但是但是代码的负面优势通常变得容易理解。 这里是那个相同的代码片，使用了Z_TYPE_P()宏:
+```
+void describe_zval(zval *foo)
+{
+  if(Z_TYPE_P(foo) == IS_NULL) {
+    php_printf("The variable is NULL");
+  } else {
+    php_printf("The variable is of type %d", Z_TYPE_P(foo));
+  }
+}
+```
+  _P后缀表明传入的参数包含了单个间接层。该集合还有两个宏: Z_TYPE()和Z_TYPE_PP(), 前者期望zval的类型参数没有间接层， 后者希望有两个间接层(zval **).
+  
+  不过PHP7对这个结构做了些颠覆。后面研究PHP7的数据类型及存储原理。
+  
+> 注意， 这个例子中的特殊输出函数php_printf(), 用于显示一片数据。 这个函数语法上等价于stdio的printf()函数；然而，它为web服务器SAPI处理特殊进程，并且采用了PHP输出缓冲机制。 在后面第5章的你会了解更多关于此函数的情况。
 
 ============================
 
 ### 数据值
+  使用数据类型type, zval的值可以使用三种宏来检测。 这些宏也是以Z_开头，选择性的以_P或_PP，依赖于间接引用的度。
+  
+  对于简单标量类型，布尔值，长整型和浮点数， 这些宏简短且一致: BVAL, LVAL, DVAL.
+```
+void display_values(zval boolzv, zval *longpzv, zval **doubleppzv)
+{
+  if(Z_TYPE(boolzv) == IS_BOOL) {
+    php_printf("The value of the boolean is: %s\n", Z_BVAL(boolzv) ? "true" : "false");
+  }
+  
+  if(Z_TYPE_P(longpzv) == IS_LONG) {
+    php_print("The value of the long is: %ld\n", Z_LVAL_P(longpzv));
+  }
+  
+  if(Z_TYPE_PP(doubleppzv) == IS_DOUBLE) {
+    php_printf("The value of the double is: %f\n", Z_DVAL_PP(doubleppzv));
+  }
+}
+```
+  字符串变量，因为它包含两个属性，有一对三胞胎的宏代表char *(STRVAL), int(STRLEN)元素:
+```
+void display_string(zval *zstr)
+{
+  if(Z_TYPE_P(zstr) != IS_STRING) {
+    php_printf("The wrong datatype was passed!\n");
+  }
+  
+  PHPWRITE(Z_STRVAL_P(zstr), Z_STRLEN_P(zstr));
+}
+```
 
+  数组数据类型存储在内部结构HashTable *， 可以使用ARRVAL三胞胎:Z_ARRVAL(zv), Z_ARRVAL_P(pzv), Z_ARRVAL_PP(ppzv). 当通过PHP核心和PECL模块的旧代码查看，你可能会遇到HASH_OF()宏， 它参数为zval *, 该宏一般等价于Z_ARRVAL_P()宏；然而，这种用法被废弃了，新代码中尽量不要使用。
+  
+  对象代表复杂内部结构， 有多个访问宏: OBJ_HANDLE，返回处理标识符， OBJ_HT处理表，OBJCE类定义， OBJPROP属性HashTable, OBJ_HANDLER操作OBJ_HT表中的特定处理器方法。 不要担心这些变化多样的对象宏， 后面在第10章，11章会详述它们。
+  
+  在zval中， 资源数据类型存储为简单整型，可以使用RESVAL三胞胎来访问。 这个整数传入zend_fetch_resource()函数，从数个标识符中查找注册的资源。资源数据类型会在后面第9章中介绍。
+  
+  
 ===========================
 
 
 ### 数据创建
+  到目前为止，你知道如何从zval中取出所需数据，是时候创建一些你自己的数据了。 虽然zval能在函数顶部简单声明为直接变量， 它将使得变量数据存储局部性，为了离开函数到达用户空间， 需要对其进行拷贝。
+  
+  因为你几乎总是希望你创建的zval以某种形式到达用户空间，你将要分配一块内存并赋值这个块给zval*指针。再一次很明显，解决方案使用malloc(sizeof(zval))不是正确的答案。 相反，你将使用另外一个Zend宏: MAKE_STD_ZVAL(pzv). 这个宏将在其他zval旁边以优化的内存块分配空间， 自动处理内存不足的问题(下一章会介绍这块), 并初始化新zval的refcount和is_ref属性。
+> 注意: 除了MAKE_STD_ZVAL(), 你会经常看到PHP源代码中另外一个zval*创建宏:ALLOC_INIT_ZVAL(). 这个宏和MAKE_STD_ZVAL()的区别仅仅在于，初始化zval *的数据类型为IS_NULL;
+
+  一旦数据存储空间可用， 是时候为你全新的zval产生一些信息。 在前面数据存储上读取部分，你可能都准备使用Z_TYPE_P()和Z_SOMEVAL_P()宏来设置你的新变量。看起来这个明显的解决方案正确的?
+  
+  然而再次失败!
+  
+  Zend另外暴露了一系列宏来设置zval *的值。 下面是这些宏以及如何扩展这个到你已经熟悉的那些:
+```
+ZVAL_NULL(pzv)  Z_TYPE_P(pzv) = IS_NULL;
+```
+  虽然这个宏和直接版本没有节省什么， 它包括下列完整的宏:
+```
+ZVAL_BOOL(pzv, b) Z_TYPE_P(pzv) = IS_NULL;
+                  Z_BVAL_P(pzv) = b ? 1 : 0;
+                  
+ZVAL_TRUE(pzv);   ZVAL_BOOL(pzv, 1);
+ZVAL_FALSE(pzv);  ZVAL_BOOL(pzv, 0);
+```
+
+  注意，任何非零值提供给ZVAL_BOOL()都会导致返回true事实。这很明显，因为任何非零值类型在用户空间都被强制转换为布尔类型。当硬编码到内部代码中， 最好明确使用1作为true事实。 宏ZVAL_TRUE()和ZVAL_FALSE()提供了这种便利，有时候让代码更加易于理解。
+  
+```
+ZVAL_LONG(pzv, l);    Z_TYPE_P(pzv) = IS_LONG;
+                      Z_LVAL_P(pzv) = l;
+
+ZVAL_DOUBLE(pzv, d);  Z_TYPE_P(pzv) = IS_DOUBLE;
+                      Z_DVAL_P(pzv) = d;
+```
+  基本标量宏就像它们一样简单。 设置zval的类型，赋予一个数值给它们。
+  
+```
+ZVAL_STRINGL(pzv, str, len, dup); Z_TYPE_P(pzv) = IS_STRING;
+                                  Z_STRLEN(pzv) = len;
+                                  if(dup) {
+                                    Z_STRVAL_P(pzv) = estrndup(str, len + 1);
+                                  } else {
+                                    Z_STRVAL_P(pzv) = str;
+                                  }
+                                  
+ZVAL_STRING(pzv, str, dup);     ZVAL_STRINGL(pzv, str, strlen(str), dup);
+```
+
+  这里才是zval创建越来越有趣的地方。字符串，数组，对象以及其他资源，都需要分配额外内存来存储数据。 下一章会介绍内存管理的陷阱；到现在为止，仅仅注意到复制值1会分配新内存，并拷贝字符串的内容，而值0仅仅是简单的将zval指向已经存在的字符串数据。
+  
+```
+ZVAL_RESOURCE(pzv, res);       Z_TYPE_P(pzv) = IS_RESOURCE;
+                               Z_RESVAL_P(pzv) = res;
+```
+
+  回忆一下前面的资源在zval里边仅仅使用一个整型存储。因此ZVAL_RESOURCE()和ZVAL_LONG()宏扮演的行为一致，只是使用的类型不同而已。
+  
 
 ===========================
 
