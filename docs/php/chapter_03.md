@@ -63,7 +63,7 @@ void call_function(const char *fname, int fname_len TSRMLS_DC)
   
   总结: ZendMM在请求die掉的时候，释放该请求所使用的内存。 操作系统在进程die掉的时候，释放该进程所使用的内存。ZendMM粒度更细腻些。
   
-  
+  除了提供隐式的内存清理，ZendMM也根据php.ini中的设置控制每个请求内存使用: memory_limit。 如果脚本尝试请求多于系统整体可用的内存，或者超过它的每个请求持有限制，ZendMM会自动引发一个E_ERROR信息，然后开始紧急救助(bailout)进程。
 
 ===========================
 #### 引用计数
