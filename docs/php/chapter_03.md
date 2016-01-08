@@ -126,6 +126,33 @@ void *safe_pemalloc(size_t size, size_t count, size_t addtl, char persistent);
 
 ===========================
 #### 引用计数
+  注意内存分配和释放是像PHP这样的语言中多请求处理长期至关重要的术语，但是这只是蓝图的一半。 对服务器而言为了处理每秒成千上万的点击保证功能有效性，每个请求需要使用尽可能少的内存，以及执行最低限度的不必要的数据复制。考虑下面的PHP代码片段:
+```
+<?php
+  $a = "Hello World";
+  $b = $a;
+  unset($a);
+```
+  第一条调用，单个变量被创建，12字节的内存块被赋予给它，并保存"Hello World"字符串，结尾以NULL结束。第二行代码，$b被设置成和$a同样的值，然后$a被释放掉.
+  
+  如果PHP把每个变量赋值都视为拷贝变量内容的原因，那么又需要额外的12字节来拷贝赋值字符串，额外的处理器负载将消耗在数据拷贝过程。当第三行出现，原来变量被释放，那么做的内容赋值变得完全没有必要，看起来很可笑。 那么现在继续深入，想象一下，如果有10MB的文件被加载到两个变量中。那样将需要20MB的空间，而实际上只需要10MB空间就足够了。 引擎有必要浪费这么多时间和内存在这样无用功上吗? 
+  要知道PHP比上面的要明智多了。
+  
+  记住一点，变量名称和它们的值在引擎里边实际上是两个不同概念。变量值实际上是一个无名的zval*保存的，在刚的情况下，是字符串值。它被赋值给变量$a, 使用Zend的_hash_add(). 那么如果两个变量指向相同的值呢?
+  
+```
+{
+  zval *helloval;
+  MAKE_STD_ZVAL(helloval);
+  ZVAL_STRING(helloval, "Hello World", 1);
+  zend_hash_add(EG(active_symbol_table), "a", sizeof("a"),
+    &helloval, sizeof(zval *), NULL);
+  
+  zend_hash_add(EG(active_symbol_table), "b", sizeof("b"),
+    &helloval, sizeof(zval *), NULL);
+}
+```
+  在这一点上，你可能实际上观察到$a, $b都包含了相同的字符串"Hello World". 不幸的是，
 
 ===========================
 
