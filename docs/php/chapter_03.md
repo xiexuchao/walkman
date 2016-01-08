@@ -63,7 +63,23 @@ void call_function(const char *fname, int fname_len TSRMLS_DC)
   
   总结: ZendMM在请求die掉的时候，释放该请求所使用的内存。 操作系统在进程die掉的时候，释放该进程所使用的内存。ZendMM粒度更细腻些。
   
-  除了提供隐式的内存清理，ZendMM也根据php.ini中的设置控制每个请求内存使用: memory_limit。 如果脚本尝试请求多于系统整体可用的内存，或者超过它的每个请求持有限制，ZendMM会自动引发一个E_ERROR信息，然后开始紧急救助(bailout)进程。
+  除了提供隐式的内存清理，ZendMM也根据php.ini中的设置控制每个请求内存使用: memory_limit。 如果脚本尝试请求多于系统整体可用的内存，或者超过它的每个请求持有限制，ZendMM会自动引发一个E_ERROR信息，然后开始紧急救助(bailout)进程。增加这个的好处是大多数内存分配调用的返回值无需检查，因为失败导致立即longjmp()到引擎的shutdown部分。
+  
+  在PHP内核和操作系统实际的内存管理层挂钩本身是通过不比引用所有内部内存分配所需要使用可替代的函数集合复杂实现的。例如，相对于分配16位的内存块使用malloc(16), PHP代码使用emolloc(16). 另外执行实际的内存分配任务，ZendMM将使用绑定的请求信息标记那个块，以便当请求紧急救助，ZendMM可以隐式的清理它。
+  
+  通常，内存需要分配分配的要比单个请求持久要长一点。 这些类型的分配，叫做持久分配，因为它们在请求结束还是持久的，可以使用传统的内存分配器因为它们不需要ZendMM为它添加额外的单个请求信息。有时候，它不知道知道运行时是否特定分配需要持久或非持久， 因此ZendMM暴露了一系列帮助宏扮演诸如其他内存分配的函数集合， 但是有一个额外参数表明持久性。
+  
+  如果你真正的希望持久分配，这个参数被设置为1， 这种情况下，请求将传入传统malloc()家族的分配器。 如果运行时逻辑确定这个块不需要持久化，这个参数将被设置为0， 调用将被沟道到每个请求内存分配器函数。
+  例如， pemalloc(buffer_len, 1)映射到malloc(buffer_len), 而pemalloc(buffer_len, 0)映射到emalloc(buffer_len)使用下面的宏定义:
+```
+#define in Zend/zend_alloc.h:
+
+#define pemalloc(size, persistent) \
+  ((persistent) ? malloc(size) : emalloc(size))
+```
+  在ZendMM中可以找到的每一个分配器函数都可以在传统同行中找到相应的分配器。
+  
+  下表列出ZendMM支持的分配器函数以及它们的e/pe同行关系：
 
 ===========================
 #### 引用计数
