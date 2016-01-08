@@ -53,6 +53,17 @@ void call_function(const char *fname, int fname_len TSRMLS_DC)
   efree(lcase_fname);
 }
 ```
+  当遇到php_error_docref()行，内部错误处理器看到这个错误级别是致命的并调用longjmp()打断当前程序流，并离开call_function()甚至没有到达efree(lcase_fname)行。你可能认为efree行可能被移到上面的zend_error()行里边，但是关于首次调用call_function实例的代码地方在哪呢？特别是类似fname自身分配的字符串以及你不能释放它，在没有使用错误信息的时候。
+  
+> 注意 php_error_docref()函数是一个内部等价与TRigger_error(). 第一个参数是可选的文档引用位置将被附加到docref.root, 如果在php.ini中启用的话。第三个参数可以是任意的家族E_*,常数表明显示度。 第四个和后面的参数跟printf()样式一样， 是可变参数列表。
+
+##### Zend内存管理
+  对请求应急救援(bailout)的解决是在Zend内存管理层(ZendMM). 引擎的这部分扮演的角色类似于操作系统正常扮演的， 为调用应用程序分配内存。 不同之处在于，它是足够低层的，在进程空间中是请求感知的，因此当请求die, 它能执行类似操作系统在进程die的时候执行的行为。 也就是说，它明确的释放了该请求的所拥有的内存。 下图展示了ZendMM和操作系统以及PHP进程的关系。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/php/zendmm_os_php_relation.png)
+  
+  总结: ZendMM在请求die掉的时候，释放该请求所使用的内存。 操作系统在进程die掉的时候，释放该进程所使用的内存。ZendMM粒度更细腻些。
+  
+  
 
 ===========================
 #### 引用计数
