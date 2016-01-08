@@ -80,6 +80,49 @@ void call_function(const char *fname, int fname_len TSRMLS_DC)
   在ZendMM中可以找到的每一个分配器函数都可以在传统同行中找到相应的分配器。
   
   下表列出ZendMM支持的分配器函数以及它们的e/pe同行关系：
+```
+分配函数                          e/pe同行分配函数
+--------------------------------------------------------------------------------
+void *malloc(size_t count)        void *emalloc(size_t count);
+                                  void *pemalloc(size_t count, char persistent);
+--------------------------------------------------------------------------------
+void *calloc(size_t count)        void *ecalloc(size_t count);
+                                  void *pecalloc(size_t count, char persistent);
+--------------------------------------------------------------------------------
+void *realloc(void *ptr, size_t   void *erealloc(void *ptr, size_t count);
+  count);                         void *perealloc(void *ptr, size_t count, char persistent);
+--------------------------------------------------------------------------------
+void *strdup(void *ptr)           void *estrdup(void *ptr);
+                                  void *pestrdup(void *ptr, char persistent);
+--------------------------------------------------------------------------------
+void free(void *ptr);             void *efree(void *ptr);
+                                  void *pefree(void *ptr, char persistent);
+--------------------------------------------------------------------------------
+```
+  你会注意到即使pefree()都需要持久标志。 这是因为在pefree()被调用时，它实际上不知道ptr是否为持久分配的。调用free()在非持久分配可能导致少量的双重free, 而调用efree()在持久分配上，将最大可能导致段错误，因为内存管理尝试查找的管理信息不存在。 你的代码需要记住数据结构是分配为持久还是非持久的。
+  
+  另外核心的分配函数集合，少量增加相对方便的ZendMM函数存在:
+  `void *estrndup(void *ptr, int len);`
+  
+  分配len+1字节内存，并拷贝ptr的len长度到新分配的块中。 estrndup的行为大致如下:
+```
+void *estrndup(void *ptr, int len)
+{
+  char *dst = emalloc(len + 1);
+  memcpy(dst, ptr, len);
+  dst[len] = 0;
+  return dst;
+}
+```
+  种植符号\0显式的添加到缓冲后面，确保任何使用estrndup()的函数对字符串赋值不需要担心传入的结果缓冲到函数期望终止字符串，例如printf(). 当使用estrndup()拷贝非字符串数据，最后一个字节必要浪费，但是更多情况下还是需要， 便利大于效率的减少。
+  
+```
+void *safe_emalloc(size_t size, size_t count, size_t addtl);
+void *safe_pemalloc(size_t size, size_t count, size_t addtl, char persistent);
+```
+  通过这两个函数分配的实际内存长度是((size * count) + addtl). 你可能会问， 为什么需要额外的函数? 为什么不用emalloc/pemalloc， 为什么我们自己不去匹配呢? 原因在于相同的词:安全。 虽然导致这种情况的基本不可能， 可能结尾导致这样等价会导致整型限制溢出主机平台。 这样可能导致分配负字节数字，或者更坏的情况， 负数明显限于调用程序希望得到的。 safe_emalloc()避免这种类型的错略，通过检查整型溢出，并明确防止诸如此类的溢出发生。
+  
+> 注意， 不是所有的内存分配运行时具有一个p*同行方法。 例如，PHP5.1之前perstrndup(), safe_pemalloc()不存在。 偶尔有时候你需要在Zend API中解决这些差异。
 
 ===========================
 #### 引用计数
