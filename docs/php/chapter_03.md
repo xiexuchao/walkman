@@ -184,10 +184,74 @@ void *safe_pemalloc(size_t size, size_t count, size_t addtl, char persistent);
 ```
 zval *get_val_and_separate(char *varname, int varname_len TSRMLS_DC)
 {
-
+  zval **varval, *varcopy;
+  if(zend_hash_find(EG(active_symbol_table), varname, varname_len + 1, (void **)&varval) == FAILURE) {
+    return NULL;
+  }
+  
+  if((*varval)->refcount < 2) {
+    /* varname is the only actual reference, no separating to do */
+    return *varval;
+  }
+  
+  /** otherwise, make a copy of the zval* value **/
+  MAKE_STD_ZVAL(varcopy);
+  varcopy = *varval;
+  /** Duplicate any allocated structures within the zval* **/
+  zval_copy_ctor(varcopy);
+  
+  /** Remove the old version of varname
+   * this will decrease the refcount of varval in the process
+   */
+  zend_hash_del(EG(active_symbol_table), varname, varname_len + 1);
+  
+  /**
+   * Initialize the reference count of the newly created value and attach it to the varname variable
+   */
+  varcopy->refcount = 1;
+  varcopy->is_ref = 0;
+  zend_hash_add(active_symbol_table), varname, varname_len + 1, &varcopy, sizeof(zval*), NULL);
+  
+  /** Return the new zval* **/
+  return varcopy;
 }
 ```
 
+  现在引擎有了zval*, 它知道仅仅被$b所拥有，它可以转换它为长整型，并根据代码请求将其增加5.
+##### 写时变化
+  引用计数的概念也创建了一个新的数据操作可能性，以用户空间脚本实际认为的形式，用术语来说就是引用。 考虑下面的用户空间代码片段:
+```
+<?php
+  $a = 1;
+  $b = &$a;
+  $b += 5;
+```
+  对PHP代码由经验，你本能的知道$a的值将改变为6.虽然最初为1，并且没有直接改变它。 这发生的变化在于，引擎通过增加5到$b的值， 注意$b是对$a的引用，也就是说:"对我来说改变这个值而无需分离它们， 因为我想让所有对它引用的变量都看到这种改变。"
+  
+  但是，引擎又是如何知道的呢? 简单的很，看zval的最后一个字段元素is_ref。 这个仅仅是一个on/off位，定义值是否用户空间样式的引用集合。 在之前的代码片段， 当第一行被执行， $a获得一个refcount为1， is_ref为0的zval, 因为它只属于$a变量， 没有其他变量有机会对其写引用。在第二行代码， refcount增加为2， 这次除了这点，脚本包括了一个&符号，表示完全引用， is_ref元素也被设置为1.
+  
+  最后，在第三行代码的时候，引擎一旦获得$b所关联的值，检查是否需要分离。 这次，变量值不分离，因为包含了一个前面没有包含的检查。 这就是refcount检查点get_var_and_separate(), 使用了另外的一个条件:
+```
+if((*varval)->is_ref || (*varval)->refcount < 2) {
+  /** varname仅仅是实际引用，或者他是对其他变量的完全引用， 两种形式都不要执行分离操作 **/
+  return *varval;
+}
+```
+  这次，即使refcount为2， 分离处理也被短路，因为这个值是完全引用。引擎能自由修改它不用关心这个值的其他变量变量似乎神奇的自己改变它一样。
+  
+##### 分离焦虑(Separation Anxiety)
+  使用这种拷贝和引用，有大量这种事件的组合不能通过is_ref和refcount明智的操作。 考虑下面的PHP代码情况:
+```
+<?php
+  $a = 1;
+  $b = $a;
+  $c = &$a;
+```
+  这里有一个简单的值，需要和三个不同变量联系起来， 两个需要写时改变的完全引用对，第三个是写时复制分离上下文。 仅仅使用is_ref和refcount来描述关系， 那这些值怎么工作呢?
+  
+  答案是:什么也不是。这种情况下， 值必须复制为两个区别的zval*, 即使都包含了完全相同的数据。如下图:
+  
+  
 ===========================
 
 #### 总结
