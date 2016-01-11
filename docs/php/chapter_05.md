@@ -199,10 +199,21 @@ PHP_NAMED_FE(sample_h1, zif_sample_hello_world, NULL)
 ```
   PHP_FE()宏将用户空间函数sample_hello_world和zif_sample_hello_world联系起来。PHP_NAMED_FE()宏然后将用户空间函数sample_hi使用相同的内部函数实现。
   
+  现在假设一下，因为Zend引擎的核心改变，内部函数的标准前缀从zif_改为pif_. 你的扩展将突然不能编译，因为PHP_NAMED_FE()函数出现，zif_sample_hello_world未定义。
   
+  这种不常见，但是比较麻烦的情况可以通过使用PHP_FNAME()宏来扩展sample_hello_world:`PHP_NAMED_FE(sample_hi, PHP_FNAME(sample_hello_world), NULL)`.
+  
+  这种方式，如果后续前缀改变，函数入口将自动更新并使用PHP核心定义的宏扩展。
+  
+  现在你可以让入口工作了， 犹豫什么呢? 完全没有必要。 PHP暴露另外一种宏设计特别为那些创建函数别名的.之前的例子可以重写为:
+`PHP_FALIAS(sample_hi, sample_hello_world, NULL)`
+  确实，这也是官方创建函数别名的方式， 你将在PHP源代码树中几乎导出可见的。
 
 =========================================
 
 #### 总结
+  在本章中，你创建了一个简单的可工作扩展，并学到了为最主要平台构建它的必要步骤。在后续的章节中， 你将为这个扩展添加，最终包含每种PHP特性类型。
+  
+  PHP源代码树和和它依赖的工具构建在大多数它支持的平台是不断变化的。 如果这章的某些不能工作，如果有特殊的需要，可参考php.net在线手册， 安装部分来看你的版本。
 
 =========================================
