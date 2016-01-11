@@ -154,6 +154,39 @@ void *safe_pemalloc(size_t size, size_t count, size_t addtl, char persistent);
 ```
   在这一点上，你可能实际上观察到$a, $b都包含了相同的字符串"Hello World". 不幸的是，你遇到第三行unset($a);. 这种情况下，unset()不知道$a指向的数据$b也在使用，因此不能盲目的释放掉那个内存。任何后续对$b的访问查找那个已经被释放的内存空间将导致引擎崩溃。提示: 你的目的不是让引擎奔溃。 
   
+  这是通过zval的第三个字段成员解决的: refcount. 当变量第一次被创建并设置，它的refcount初始化为1，因为它假设该变量仅仅被创建者使用。 当你的代码片段将helloval赋值给$b，需要增加refcount为2， 因为该值现在被两个变量引用:
+```
+{
+  zval *helloval;
+  MAKE_STD_ZVAL(helloval);
+  ZVAL_STRING(helloval, "Hello World", 1);
+  zend_hash_add(EG(active_symbol_table, "a", sizeof("a"),
+    &helloval, sizeof(zval*), NULL);
+  
+  ZVAL_ADDREF(helloval);
+  zend_hash_add(EG(active_symbol_table, "b", sizeof("b"),
+    &helloval, sizeof(zval*), NULL);
+}
+```
+  当使用unset()删除$a变量的拷贝版本，可以看到refcount参数，某些关心数据的应该实际上仅仅是减少refcount, 而不是让它孤立。
+  
+##### 写时复制
+  通过引用计数节省内存确实是个好主意，但是如果当你希望仅仅修改这样变量中的其中一个时会发生什么呢? 考虑下面的代码片段:
+```
+<?php
+  $a = 1;
+  $b = $a;
+  $b += 5;
+```
+  看看逻辑流，你将当然期望$a仍然是1，而$b现在应该是6. 在这个点上，你知道Zend尽量节省内存，在第二行代码后，通过$a, $b引用相同的zval， 那么当第三行出现的时候，$b必须被改变?
+  
+  答案是，Zend查看refcount, 看它是否大于1，并将其分离。 Zend引擎中的分离处理是通过销毁引用对，你只看到了相反的过程:
+```
+zval *get_val_and_separate(char *varname, int varname_len TSRMLS_DC)
+{
+
+}
+```
 
 ===========================
 
