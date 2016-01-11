@@ -249,9 +249,23 @@ if((*varval)->is_ref || (*varval)->refcount < 2) {
 ```
   这里有一个简单的值，需要和三个不同变量联系起来， 两个需要写时改变的完全引用对，第三个是写时复制分离上下文。 仅仅使用is_ref和refcount来描述关系， 那这些值怎么工作呢?
   
-  答案是:什么也不是。这种情况下， 值必须复制为两个区别的zval*, 即使都包含了完全相同的数据。如下图:
+  答案是:none。这种情况下， 值必须复制为两个区别的zval*, 即使都包含了完全相同的数据。如下图:
   
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/php/forced_separation_on_reference.png)
+  类似的，下面的代码块将导致相同的冲突，并强制将值分离到拷贝版本中。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/php/forced_separation_on_copy.png)
+  
+```
+<?php
+  $a = 1;
+  $b = &$a;
+  $c = $a;
+```
+  注意在这两种情况下，$b都和原来的zval对象关联，因为在分离发生的时间点，引擎不知道操作中第三个变量涉及的变量名。
   
 ===========================
 
 #### 总结
+  PHP是一个托管语言。在用户空间侧，小心控制资源和内存意味着简单的原型和较少的奔溃。 当你深入到内核， 所有的赌注都关停，需要开发者关心维护运行时环境的完整性。
+  
+  
