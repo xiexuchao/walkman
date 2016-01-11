@@ -170,7 +170,40 @@ $b = 'Bar';
   
   当最后一行到达，$a和$b都查找实际的值，包含值"Bar". 让我们看看先通的函数，使用内部实现:
 ```
-
+#if (PHP_MAJOR_VERSION > 5) || (PHP_MAJOR_VERSION == 5 && \
+  PHP_MINOR_VERSION > 0)
+PHP_FUNCTION(sample_reference_a)
+{
+  zval **a_ptr, *a;
+  
+  if(zend_hash_find(&EG(symbol_table), "a", sizeof("a"),
+    (void**)&a_ptr) == SUCCESS) {
+    a = *a_ptr;
+  } else {
+    ALLOC_INIT_ZVAL(a);
+    zend_hash_add(&EG(symbol_table), "a", sizeof("a"), &a, sizeof(zval*), NULL);
+  }
+  
+  zval_ptr_dtor(return_value_ptr);
+  if(!a->is_ref && a->refcount > 1) {
+    /** $a是写时复制引用设置， 必须分离然后使用 **/
+    zval *newa;
+    MAKE_STD_ZVAL(newa);
+    *newa = *a;
+    zval_copy_ctor(newa);
+    newa->is_ref = 0;
+    newa->refcount = 1;
+    zend_hash_update(&EG(symbol_table), "a", sizeof("a"), &newa,
+      sizeof(zval*), NULL);
+      
+    a= newa;
+  }
+  
+  a->is_ref = 1;
+  a->refcount++;
+  *return_value_ptr = a;
+}
+#endif
 ```
   
 ============================
