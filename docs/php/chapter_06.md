@@ -205,6 +205,25 @@ PHP_FUNCTION(sample_reference_a)
 }
 #endif
 ```
+  return_value_ptr时另外一个传入所有内部函数的常用参数，zval**包含对return_value的指针。 通过调用zval_ptr_dtor()， 默认的retrun_value zval*被释放。 然后使用选择的新zval*替换它， 在这个例子中，变量$a，被促进到is_ref，并选择性的从任何可能具有的非完全引用对中分离出来。
+  
+  如果编译并运行这个代码，然而你可能得到一个段错误。为了让它能工作，需要添加一个结构到你的php_sample.h中:
+```
+#if (PHP_MAJOR_VERSION > 5) || (PHP_MAJOR_VERSION == 5 && PHP_MINOR_VERSION > 0)
+static
+  ZEND_BEGIN_ARG_INFO_EX(php_sample_retref_arginfo, 0, 1, 0)
+  ZEND_END_ARG_INFO()
+#endif
+```
+  然后使用结构，当你声明函数到php_sample_functions：
+```
+#if (PHP_MAJOR_VERSION > 5) || (PHP_MAJOR_VERSION == 5 && PHP_MINOR_VERSION > 0)
+  PHP_FE(sample_reference_a, php_sample_retref_arginfo)
+#endif
+```
+  这个结构在后续章节会了解到更多， 提供了重要提示给Zend引擎函数调用例程。 在这个例子中，它告诉ZE return_value将需要被重写， 并应该产生return_value_ptr使用正确的地址。 没有这个提示， ZE将简单的在return_value_ptr里边存放NULL, 那么将使这种特殊的函数奔溃， 当它到达zval_ptr_dtor()的时候。
+  
+> 注意 这些代码片段都用#if包围，告诉编译器，这个函数仅被PHP5.1以上支持。没有这个条件指令，扩展在PHP4中无法编译的(因为几个元素，包括return_value_ptr不存在)， 在PHP5.0中功能也不正确(那里有一个bug，导致引用返回实际返回的是值拷贝。)
   
 ============================
 
