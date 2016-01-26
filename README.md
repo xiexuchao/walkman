@@ -3,6 +3,7 @@
 ## 学习计划
 1. [学习计划](https://github.com/walkerqiao/walkman/blob/master/docs/learning_plan.md)
 2. [PHP内核](https://github.com/walkerqiao/walkman/blob/master/docs/php/php-internals.md)
+3. [数据分析相关](https://github.com/walkerqiao/walkman/blob/master/docs/da/readme.md)
 
 NodeJS
 =================================
