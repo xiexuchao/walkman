@@ -2,38 +2,82 @@
 
 
  * population 总体
- * sample 样本   census 普查   sampling 抽样   quantitative 量的 
-  qualitative/categorical质的   discrete 离散的   continuous 连续的 
-  population parameters 母体参数   sample statistics 样本统计量   descriptive statistics 叙述统计学 
-  inferential/inductive statistics 推论 ...    
-  抽样调查（sampliing survey 
-  单纯随机抽样（simple random sampling   系统抽样（systematic sampling   分层抽样（stratified sampling   整群抽样（cluster sampling   多级抽样（multistage sampling   常态分配(Parametric Statistics) 
-  无母数统计学(Nonparametric Statistics)   实验设计(Design of Experiment)   参数(Parameter) 
-   
-  Data analysis 资料分析   Statistical table 统计表   Statistical chart 统计图   Pie chart 圆饼图 
-  Stem-and-leaf display 茎叶图   Box plot 盒须图   Histogram 直方图   
-Bar Chart 长条图 
-  Polygon 次数多边图   Ogive 肩形图    
-  Descriptive statistics 叙述统计学   Expectation 期望值   Mode 众数   Mean 平均数   Variance 变异数 
-  Standard deviation 标准差   Standard error 标准误 
-  Covariance matrix 共变异数矩阵   Inferential statistics 推论统计学   Point estimation 点估计 
-  Interval estimation 区间估计   Confidence interval 信赖区间   Confidence coefficient 信赖系数 
-  Testing statistical hypothesis 统计假设检定   Regression analysis 回归分析   Analysis of variance 变异数分析   Correlation coefficient 相关系数   Sampling survey 抽样调查   Census 普查   Sampling 抽样   Reliability 信度   Validity 效度 
-  Sampling error 抽样误差 
-  Non-sampling error 非抽样误差   Random sampling 随机抽样 
-  Simple random sampling 简单随机抽样法   Stratified sampling 分层抽样法   
-Cluster sampling 群集抽样法 
-  Systematic sampling 系统抽样法 
-  Two-stage random sampling 两段随机抽样法 
-  Convenience sampling 便利抽样   Quota sampling 配额抽样   Snowball sampling 雪球抽样 
-   
-  Nonparametric statistics 无母数统计   The sign test 等级检定 
-  Wilcoxon signed rank tests 魏克森讯号等级检定 
-  Wilcoxon rank sum tests 魏克森等级和检定 
-  Run test 连检定法    
-  Discrete uniform densities 离散的均匀密度   Binomial densities 二项密度 
-  Hypergeometric densities 超几何密度   Poisson densities 卜松密度   Geometric densities 几何密度 
-  Negative binomial densities 负二项密度   Continuous uniform densities 连续均匀密度   Normal densities 常态密度 
+ * sample 样本
+ * census 普查
+ * sampling 抽样
+ * quantitative 定量的
+ * qualitative/categorical 定性的、定质的
+ * discrete 离散的
+ * continuous 连续的
+ * population parameters 总体参数
+ * sample statistics 样本统计量
+ * descriptive statistics 描述性统计
+ * inferential/inductive statistics 推论性统计
+ * sampliing survey 抽样调查
+ * simple random sampling 简单随机抽样
+ * systematic sampling 系统抽样
+ * stratified sampling 分层抽样
+ * cluster sampling 整群抽样
+ * multistage sampling 多级抽样
+ * Parametric Statistics 常态分配
+ * 无母数统计学(Nonparametric Statistics)
+ * 实验设计(Design of Experiment)
+ * 参数(Parameter)
+ * Data analysis 资料分析   
+ * Statistical table 统计表   
+ * Statistical chart 统计图   
+ * Pie chart 圆饼图
+ * Stem-and-leaf display 茎叶图
+ * Box plot 盒须图
+ * Histogram 直方图
+ * Bar Chart 长条图
+ * Polygon 次数多边图
+ * Ogive 肩形图
+ * Descriptive statistics 叙述统计学
+ * Expectation 期望值
+ * Mode 众数   
+ * Mean 平均数   
+ * Variance 变异数
+ * Standard deviation 标准差
+ * Standard error 标准误
+ * Covariance matrix 共变异数矩阵
+ * Inferential statistics 推论统计学
+ * Point estimation 点估计
+ * Interval estimation 区间估计
+ * Confidence interval 信赖区间
+ * Confidence coefficient 信赖系数
+ * Testing statistical hypothesis 统计假设检定
+ * Regression analysis 回归分析   
+ * Analysis of variance 变异数分析   
+ * Correlation coefficient 相关系数   
+ * Sampling survey 抽样调查   
+ * Census 普查   
+ * Sampling 抽样   
+ * Reliability 信度   
+ * Validity 效度
+ * Sampling error 抽样误差 
+ * Non-sampling error 非抽样误差
+ * Random sampling 随机抽样 
+ * Simple random sampling 简单随机抽样法
+ * Stratified sampling 分层抽样法   
+ * Cluster sampling 群集抽样法 
+ * Systematic sampling 系统抽样法 
+ * Two-stage random sampling 两段随机抽样法 
+ * Convenience sampling 便利抽样   
+ * Quota sampling 配额抽样   
+ * Snowball sampling 雪球抽样
+ * Nonparametric statistics 无母数统计
+ * The sign test 等级检定
+ * Wilcoxon signed rank tests 魏克森讯号等级检定 
+ * Wilcoxon rank sum tests 魏克森等级和检定 
+ * Run test 连检定法    
+ * Discrete uniform densities 离散的均匀密度
+ * Binomial densities 二项密度 
+ * Hypergeometric densities 超几何密度
+ * Poisson densities 卜松密度
+ * Geometric densities 几何密度 
+ * Negative binomial densities 负二项密度
+ * Continuous uniform densities 连续均匀密度   Normal densities 常态密度 
   Exponential densities 指数密度   Gamma densities 伽玛密度   Beta densities 贝他密度 
    
   Multivariate analysis 多变量分析   Principal components 主因子分析   
