@@ -22,3 +22,7 @@
   * 第十九章 [非参数方法](https://github.com/walkerqiao/walkman/blob/master/docs/da/sfbe/chapter_19.md)
   * 第二十章 [质量管理的统计方法](https://github.com/walkerqiao/walkman/blob/master/docs/da/sfbe/chapter_20.md)
   * 第二十一章 [决策分析](https://github.com/walkerqiao/walkman/blob/master/docs/da/sfbe/chapter_21.md)
+
+
+### 附录
+  * [术语中英文对照](https://github.com/walkerqiao/walkman/blob/master/docs/da/sfbe/terms.md)
