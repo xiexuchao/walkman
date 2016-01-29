@@ -1,6 +1,8 @@
 ### 统计术语中英文对照
-  * population 总体
-  sample 样本   census 普查   sampling 抽样   quantitative 量的 
+
+
+ * population 总体
+ * sample 样本   census 普查   sampling 抽样   quantitative 量的 
   qualitative/categorical质的   discrete 离散的   continuous 连续的 
   population parameters 母体参数   sample statistics 样本统计量   descriptive statistics 叙述统计学 
   inferential/inductive statistics 推论 ...    
