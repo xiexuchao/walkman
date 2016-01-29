@@ -191,4 +191,15 @@
   ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_funds_tabular.png)
   ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_funds_graph.png)
   
+  对定量变量净资产值的图形化汇总， 称为直方图(histogram), 如下图1.6. 直方图很容易看到净资产值范围为¥0～¥75，最高浓度的在$15, $30之间，只有一个净资产值比$60要高。
+  
+  另外表格和图形的显示，数字性描述统计用于总结数据。 最常见的数字描述统计是均值(average或mean).
+  
+### 1.5 推断统计
+  很多情况下，需要元素(个体、公司、选民、家庭、产品、客户等等)组的大量信息。但是，由于时间、成本以及其他考虑因素， 数据只能搜集这些组中的很小一部分。 元素组中更多的，特别是这个研究中的被称为总体， 较小的组被称为样本。 正式情况下，我们使用这种定义。
+  
+  总体(population): 总体是特定研究中所感兴趣的集合的全部元素。
+  样本(sample): 是总体的子集。
+  
+  进行调查收集整个总体的数据的过程叫做普查(census). 
   
