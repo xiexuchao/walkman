@@ -232,3 +232,20 @@
   
 ### 1.8 统计实践的道德规范(Ethical Guidelines for Statistical Practice)
   道德行为是我们应该努力争取的。 统计中道德问题产生原因在于统计在数据的搜集、分析、展示以及解释中扮演了重要角色。在统计研究中，不道德行为可能有各种形式统计结果，包括不恰当的抽样、不准确的数据分析、开发误导的图、使用不恰当的总结统计、和/或有偏见的解释。
+  在你做自己的统计工作的时候，我们鼓励你公平、深入、客观以及中立的搜集数据、进行分析(conduct analysis), 做让人口服的报告以及在报告中包含开发的信息。 作为统计的消费者，也应该意识到别人的不道德统计行为的存在。当你看到新闻、电视或者网络等上的统计，最好要以怀疑的眼光看那些信息， 总要知道数据源以及统计提供者的目的以及观点。
+  
+  美国统计协会，国家领航的数据统计分析专业组织，制定了统计实践的职业道德规范来帮助统计从业者以及商业道德标准，帮助学习如何执行统计更加有效。 该报告包含67个指导方针，分为8个主题:
+  * 专业性(Professionalism)
+  * 对投资人、客户以及雇主的责任心(Responsibilities to Funders, Clients, and Employers)
+  * 对出版物和声明的责任心(Responsibilities in Publications and Testimony)
+  * 对研究主题的责任心(Responsibilities to Research Subjects)
+  * 对研究团队同僚的责任心(Responsibilities to Research Team Colleagues)
+  * 对其他统计学者或统计从业者的责任心(Responsibilities to Other Statisticians or Statistical Practitioners)
+  * 对不当陈述负责任(Responsibilities Regarding Allegations of Misconduct)
+  * 对包括组织、个体、代理人或其他客户雇佣的统计从业者的雇主们的责任心(Responsibilities of Employers Including Organizations, Individuals, Attorneys, or Other Clients Employing Statistical Practitioners)
+  
+  专业领域的道德规范其中一条提到运行多个测试直到获得想要结果的情况的。 让我们参考一个例子。 在1.5节中，我们讨论了Norris电子公司提供的统计研究， 涉及200个使用新灯丝生产的灯泡的样本。 样本的平均使用寿命是76小时， 对所有使用新灯丝生产的灯泡的平均寿命做了估计。然而，再考虑下这个例子。 因为Norris选择了一个灯泡的样本， 另外样本选择将获取不同的平均使用寿命是合理的。
+
+  假设Norris管理希望样本结果能够支持它们声明灯泡的平均使用寿命是80小时以上。 假设将来Norris的管理层决定重复200个灯泡样本的生产和测试来继续研究， 直到获取到200个样本的平均使用寿命为80小时以上。如果研究重复足够次， 样本必定能获得--只是凑巧而已--提供了想要的数据，那么就能让Norris作出这样的一个声明。 这种情况下， 消费者可能会被误导，认为新产品会比实际使用要好的多。很明显，这种类型的行为是不道德的，这是实践中严重滥用统计的例子。
+  
+  责任心、出版物以及声明领域中还有几个道德规范涉及到数据的处理。 例如，统计学家必须考虑研究中的所有数据，并解释实际使用的样本。 在Norris电子公司的研究中，200个使用新灯丝的灯泡的平均使用寿命是76小时， 这可能比管理层希望获取的结果80小时的少或多。 假设现在在审阅了展示76小时平均使用寿命，Norris丢掉所有观察值小于70的或者更小的值，据称因为这些灯泡在生产过程启动引起的缺陷。 在丢掉这些灯泡， 平均使用寿命就到82了。 Norris说它们灯泡的平均使用寿命是82小时，你会怀疑吗?
