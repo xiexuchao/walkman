@@ -90,4 +90,32 @@
   
   类上下限: 每个元素能且仅能属于一个分类。
   
+### 2.4 交叉表和散点图
+  前面我们都是聚焦在单一变量的图表化和图形化方法汇总数据上面。 通常，管理者和决策者需要对两个变量之间关系进行了解。 交叉表和分散图就是用于这个目的。
+  
+  交叉表crosstabulation
+  交叉表是对两个变量进行图表化总结的方式。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe/sfbe_tabulation.png)
+  
+  辛普森悖论(Simpson's Paradox)
+  两个或多个交叉表中的数据通常展示的是两个变量之间的关系是如何的。 这种情况下，我们在做总结的时候必须要格外小心，因为通过聚合后的数据作出的结论可能和没有聚合前的数据作出的结论相反。基于聚合和非聚合数据作出结论相悖的现象就称为辛普森悖论。
+  
+  因为辛普森悖论的存在，总结或解释可能相悖，取决于你使用的是聚合还是非聚合数据。 在做总结之前，你需要探讨是聚合数据还是非聚合数据对作出的总结更加好的洞察力或结论。
+  
+  特别是交叉表涉及的聚合数据， 你应该探讨是否存在隐含变量会影响到结果，比如分类或非聚合交叉表提供不同的可能更好的洞察力和总结。
+  
+  辛普森悖论: 在单独考察某一变量时所做的结论都是正确的， 当把两个变量合并起来同时考察所做的结论可能就得到相反的结论，这种现象就是辛普森悖论。
+  
+  散点图(scatter diagram)和趋势线(trendline)
+  散点图是两个定量变量之间关系的图形化呈现， 而趋势线提供了这种关系的近似。 
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe/sfbe_scatter_trendline.png)
+  
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe/sfbe_scatter_relation_types.png)
+  
+### 总结
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe/sfbe_data_and_summary_methods.png)
+  
+### 术语
+  * 分类数据(Categorical Data)
+  * 定量数据(Quantitative Data)
   
