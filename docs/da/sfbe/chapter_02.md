@@ -49,7 +49,25 @@
 
   让我们使用下面的例子来演示如何构造和解释分类数据的频率分布。 
   Coke Classic, Diet Coke, Dr. Pepper, Pepsi和Sprite是五个流行的软饮料。 下面表2.1是选择的50个软饮料购买的样本。
-
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe/sfbe_5_soft_drink.png)
   
+  要为这些数据开发频率分布， 我们只需要将表2.1中出现的每种软饮料进行出现次数计数。
+  Coke Classic出现19次, Diet Coke出现8次, Dr. Pepper出现5次, Pepsi出现13次, Sprite出现5次.这些是根据表2.1中的频率分布总结的。
+  
+  这个频率分布提供了50个饮料购买中5个软饮料是如何分布的。这个总结相比原始数据具有更加明锐的洞察力。查看这些频率分布， 我们可以看到Coke Classic是佼佼者， Pepsi是第二，等等。频率分布总结关于5种软饮料的流行度。
+  
+  相对频率分布和百分比频率分布
+  相对频率分布展示每种不重复分类(nonoverlapping classes)中项目的数目(频次)。然而，我们通常使用每个分类中项目的比率或者百分比。
+  某个类的相对频率等于术语这个类的项目的分数(fraction)或比例(proportion)。对于具有n个观察值的数据集， 每个类的相对频率可以通过下面的公式确定:
+  A类的相对频率 = A类的频次/n                             (2.1)
+  
+  类的百分比频率是相对频率乘以100.
+  
+  相对频率分布给出了表格化的每个分类的相对频率的数据展示。 表2.3展示了5种软饮料的相对频率分布和百分比频率分布。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe/sfbe_5_soft_drink_tabular.png)
+  
+  
+### 2.2 定量数据的汇总
+
   
   
