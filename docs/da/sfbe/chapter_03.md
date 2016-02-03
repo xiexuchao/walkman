@@ -143,3 +143,21 @@
   协方差(Covariance)
   对于样本具有n个观察值(x1, y1), (x2, y2),等等，样本的协方差定义如下:
   
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_covariance_sample.png)
+  
+  总体的协方差定义:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_covariance_sample.png)
+  
+  协方差的解释
+  为了解释样本协方差，考虑下面的图3.9. 这个是和3.7图的三点图是一样的， 不过添加了两条附加线.��� 3
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_scatter_for_covariance.png)
+  
+  数据点被分成四个象限， 其中第一象限的x大于x的均值，y大于y的均值；第二象限中x小于x的均值，但y大于y的均值；第三象限，x,y均小于相应的均值；第四象限x大于x均值，但y小于y的均值。
+  
+  如果协方差s<sub>xy</sub>为正数，那么对这个协方差影响较大的点必须位于第一象限和第三象限。 因此协方差的正值表明x和y的正线性相关，也就是说随着x的增加，y也随着增加。
+  如果s<sub>xy</sub>为负数， 那么对这个协方差影响较大的点必须在第二象限或第四象限。因此负的协方差表明x和y之间是负线性相关的，随着x的增加，y减少。
+  最后一种情况。如果点均匀分布到四个象限中，那么协方差接近0， 表明x和y之间没有线性相关。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_covariance_interpretation.png)
+  
+  
+  
