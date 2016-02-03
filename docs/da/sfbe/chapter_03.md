@@ -176,4 +176,16 @@
   结束的时候，我们注意到，相关性提供了一种线性相关的度量方法，但是并不是必然的因果关系。
   两个变量之间较高的相关性并不代表一个变量的改变会导致另外一个变量的改变。 
   
+### 3.6 加权平均值以及分组数据的情况
+  加权均值的公式:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_weighted_mean.png)
+  
+  分组数据
+  很多情况下，位置和变异性度量，都是使用独立数据值计算的。但有些时候，只有分组数据或频率分布形式的数据可用。下面的讨论，我们将展示加权均值公式是如何用于获取分组数据大概的均值、离散性以及标准差。
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_sample_grouped_data_mean.png)
+  
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_sample_grouped_data_variance.png)
+  
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_population_grouped_data_mean_variance.png)
+  
   
