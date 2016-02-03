@@ -189,3 +189,8 @@
   ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_population_grouped_data_mean_variance.png)
   
   
+### 总结
+  本章我们介绍了几种描述性统计可用于位置、差异以及数据分布形状方面的汇总。下面是总结列表:
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_summary_3_statistics.png)
+  
+  
