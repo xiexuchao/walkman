@@ -1,18 +1,19 @@
 ## 贝叶斯数据分析(Bayesian Data Analysis)
 
 ### 第一部分 贝叶斯推论的基础
-  * 第一章 [概率和推理](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_01.md)
-  * 第二章 [单参数模型](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_02.md)
-  * 第三章 [多参数模型介绍](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_03.md)
-  * 第四章 [非贝叶斯方法的渐近性和联系](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_04.md)
-  * 第五章 [层次模型](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_05.md)
+ 
+ * 第一章 [概率和推理](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_01.md)
+ * 第二章 [单参数模型](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_02.md)
+ * 第三章 [多参数模型介绍](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_03.md)
+ * 第四章 [非贝叶斯方法的渐近性和联系](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_04.md)
+ * 第五章 [层次模型](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_05.md)
 
 
 ### 第二部分 贝叶斯数据分析的基础
-  * 第六章 [模型检验](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_06.md)
-  * 第七章 [模型评估、模型比较及模型扩展](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_07.md)
-  * 第八章 [数据搜集的模型报告](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_08.md)
-  * 第九章 [决策分析](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_09.md)
+ * 第六章 [模型检验](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_06.md)
+ * 第七章 [模型评估、模型比较及模型扩展](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_07.md)
+ * 第八章 [数据搜集的模型报告](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_08.md)
+ * 第九章 [决策分析](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_09.md)
 
 ### 第三部分 高级计算
   * 第十章 [贝叶斯计算介绍](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_10.md)
