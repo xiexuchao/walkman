@@ -9,7 +9,7 @@
  
  第4章概述了贝叶斯和其他统计推断方法的基本关系。前面的章节聚焦在开发贝叶斯推断的基本观点的简单例子，贝叶斯方法中的例子采用了实践的不同关系到更多第三章出现的传统的方法。贝叶斯方法的实践优势出现在第5章， 那么我们介绍层级模型、允许参数作为先验， 从数据中估计自己的分布。
  
- * 第一章 [概率和推理](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_01.md)
+ * 第一章 [概率和推断](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_01.md)
  * 第二章 [单参数模型](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_02.md)
  * 第三章 [多参数模型介绍](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_03.md)
  * 第四章 [非贝叶斯方法的渐近性和联系](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_04.md)
