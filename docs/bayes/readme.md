@@ -1,6 +1,13 @@
 ## 贝叶斯数据分析(Bayesian Data Analysis)
 
-### 第一部分 贝叶斯推论的基础
+### 第一部分 贝叶斯推断的基础
+
+ 贝叶斯推断是拟合概率模型到数据集以及通过模型的参数和不可观测量(如新观察值的预测)概率分布汇总结果的过程。
+ 在1-3章，我们介绍几种有用的模型家族，并说明它们在分析相对简单的数据结构中的应用。 有些数学中出现了概率分布的分析操作，特别是在多参数问题的转换和集成中。
+ 
+ 我们不同于其他贝叶斯推理的介绍，我们重点在随机模拟，以及数学分析和模拟的结合， 以及一般的概括分布的方法。
+ 
+ 第4章
  
  * 第一章 [概率和推理](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_01.md)
  * 第二章 [单参数模型](https://github.com/walkerqiao/walkman/blob/master/docs/bayes/chapter_02.md)
