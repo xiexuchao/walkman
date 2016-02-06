@@ -41,3 +41,7 @@
   
 ### 5.2 离散概率分布
   
+  
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_binomial_expected_value.png)
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_binomial_variance.png)
+  
