@@ -142,3 +142,21 @@
   ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_summary_reject_h0.png)
 
   
+  总结及实践建议
+  假设检验的步骤:
+  p值方法
+  1. 指出原假设和备则假设H<sub>0</sub>和H<sub>a</sub>
+  2. 指定显著性水平α
+  3. 抽样并计算检验统计量
+  4. 使用检验统计量和计算的p值比较
+  5. 如果p值≤α, 拒绝H<sub>0</sub>
+  
+  临界值法
+  1. 指出原假设和备则假设H<sub>0</sub>和H<sub>a</sub>
+  2. 指定显著性水平α
+  3. 抽样并计算检验统计量
+  4. 使用显著性水平来确定临界值和拒绝规则
+  5. 使用检验统计量和拒绝规则来确定是否拒绝H<sub>0</sub>
+  
+  
+  区间估计和假设检验的关系
