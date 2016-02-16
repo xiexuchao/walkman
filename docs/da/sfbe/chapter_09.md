@@ -127,3 +127,18 @@
   ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_critical_value_cal.png)
   
   ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_critical_value_rule.png)
+
+  使用p值方法和临界值方法都可以得到结论。 但是p值方法除了能够得到是否拒绝原假设，还能知道显著情况到底如何；而临界值只能获得给定的显著性条件下的显著情况。
+  
+  对于右尾检验来说， 基本思路一致。
+  * p值≤α拒绝原假设
+  * z≥z临界值 拒绝原假设
+  
+  对于双尾检验 H<sub>0</sub>: μ=μ<sub>0</sub>     H<sub>a</sub>: μ≠μ<sub>0</sub>
+  * p值≤α拒绝原假设
+  * z≤-z<sub>α/2</sub>或z≥z<sub>α/2</sub>拒绝原假设
+  
+  汇总表
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_summary_reject_h0.png)
+
+  
