@@ -42,7 +42,7 @@
   * 99.730020%的面积在平均数左右三个标准差的范围内。
   * 99.993666%的面积在平均数左右四个标准差的范围内。
   
-  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_std_normal_1.png)
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/sfbe_std_normal_1.png)
 
   深蓝色区域是距平均值小于一个标准差之内的数值范围。在正态分布中，此范围所占比率为全部数值之68%，根据正态分布，两个标准差之内的比率合起来为95%；三个标准差之内的比率合起来为99%。
   在实际应用上，常考虑一组数据具有近似于正态分布的概率分布。
@@ -52,5 +52,5 @@
   * 约99.7%数值分布在距离平均值有3个标准差之内的范围。
   称为"68-95-99.7法则"或"经验法则"。
 
-  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_std_normal_2.png)
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/sfbe_std_normal_2.png)
   
