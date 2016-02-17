@@ -71,7 +71,7 @@
   更详细的见附录表中，列举了详细的t分布表。
   
   关于总体均值的区间估计:σ未知
-  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_formula_8.4.png)
+  ![](https://github.com/walkerqiao/walkman/blob/master/images/da/sfbe_formula_8.2.png)
   
   实践建议
   如果总体遵循正态分布， 表达式8.2提供的置信区间是准确的，可以用于任何尺寸的样本。 如果样本不服从正态分布， 8.2表达式提供的置信区间是近似的。这个情况下，近似的质量同时依赖于总体的分布和样本的大小。
